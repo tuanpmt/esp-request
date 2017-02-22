@@ -3,42 +3,106 @@
 #include <strings.h>
 #include "esp_request.h"
 #include "esp_log.h"
+
+#include "lwip/sockets.h"
+#include "lwip/dns.h"
+#include "lwip/netdb.h"
+#include "lwip/igmp.h"
+
 #define REQ_TAG "HTTP_REQ"
 
 #define REQ_CHECK(check, log, ret) if(check) ESP_LOGE(REQ_TAG, log);ret;
+
+static int resolve_dns(const char *host, struct sockaddr_in *ip) {
+    struct hostent *he;
+    struct in_addr **addr_list;
+    he = gethostbyname(host);
+    if(he == NULL)
+        return 0;
+    addr_list = (struct in_addr **)he->h_addr_list;
+    if(addr_list[0] == NULL)
+        return 0;
+    ip->sin_family = AF_INET;
+    memcpy(&ip->sin_addr, addr_list[0], sizeof(ip->sin_addr));
+    return 1;
+}
 
 static char *http_auth_basic_encode(const char *username, const char *password)
 {
     return NULL;
 }
-static int ssl_connect(request_t *req)
-{
-    return 0;
-}
+
 
 static int nossl_connect(request_t *req)
 {
+    int socket;
+    struct sockaddr_in remote_ip;
+    struct timeval tv;
+    list_t *host, *port, *timeout;
+    bzero(&remote_ip, sizeof(struct sockaddr_in));
+    //if stream_host is not ip address, resolve it AF_INET,servername,&serveraddr.sin_addr
+    host = list_get_key(req->opt, "host");
+    if(host == NULL)
+        return -1;
+    if(inet_pton(AF_INET, (const char*)host->value, &remote_ip.sin_addr) != 1) {
+        if(!resolve_dns((const char*)host->value, &remote_ip)) {
+            return -1;
+        }
+    }
+    socket = socket(PF_INET, SOCK_STREAM, 0);
+    REQ_CHECK(socket < 0, "socket failed", return -1);
+
+    port = list_get_key(req->opt, "port");
+    if(port == NULL)
+        return -1;
+
+    remote_ip.sin_family = AF_INET;
+    remote_ip.sin_port = htons(atoi(port->value));
+
+    tv.tv_sec = 10; //default timeout is 10 seconds
+    timeout = list_get_key(req->opt, "timeout");
+    if(timeout) {
+        tv.tv_sec = atoi(timeout->value);
+    }
+    tv.tv_usec = 0;
+    setsockopt(socket, SOL_SOCKET,SO_RCVTIMEO, &tv, sizeof(tv));
+
+    if (connect(socket, (struct sockaddr * )(&remote_ip), sizeof(struct sockaddr)) != 0) {
+        close(socket);
+        return -1;
+    }
+    return socket;
+}
+static int ssl_connect(request_t *req)
+{
+    req->socket = nossl_connect(req);
+    REQ_CHECK(req->socket < 0, "socket failed", return -1);
+
+    //TODO: Check
+    req->ctx = SSL_CTX_new(TLSv1_1_client_method());
+    req->ssl = SSL_new(req->ctx);
+    SSL_set_fd(req->ssl, req->socket);
+    SSL_connect(req->ssl);
     return 0;
 }
-
 static int ssl_write(request_t *req, char *buffer, int len)
 {
-    return 0;
+    return SSL_write(req->ssl, buffer, len);
 }
 
 static int nossl_write(request_t *req, char *buffer, int len)
 {
-    return 0;
+    return write(req->socket, buffer, len);
 }
 
 static int ssl_read(request_t *req, char *buffer, int len)
 {
-    return 0;
+    return SSL_read(req->ssl, buffer, len);
 }
 
 static int nossl_read(request_t *req, char *buffer, int len)
 {
-    return 0;
+    return read(req->socket, buffer, len);
 }
 static int ssl_close(request_t *req)
 {
@@ -97,6 +161,9 @@ request_t *req_new(const char *uri)
     //TODO: Free req before return
     REQ_CHECK(req->buffer == NULL, "Error allocate buffer", return NULL);
 
+    req->opt = calloc(1, sizeof(list_t));
+    req->header = calloc(1, sizeof(list_t));
+
     req_setopt_from_uri(req, uri);
 
     req_setopt(req, REQ_REDIRECT_FOLLOW, "true");
@@ -117,6 +184,7 @@ void req_setopt(request_t *req, REQ_OPTS opt, void* data)
             break;
         case REQ_SET_HOST:
             list_set_key(req->opt, "host", data);
+            list_set_key(req->header, "Host", data);
             break;
         case REQ_SET_PORT:
             list_set_key(req->opt, "port", data);
