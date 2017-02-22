@@ -14,5 +14,7 @@ list_t *list_get_first(list_t *root);
 void list_remove(list_t *root, list_t *tree);
 void list_clear(list_t *root);
 list_t *list_set_key(list_t *root, const char *key, const char *value);
+list_t *list_get_key(list_t *root, const char *key);
+int list_check_key(list_t *root, const char *key, const char *value);
 list_t *list_set_from_string(list_t *root, const char *data); //data = "key=value"
 #endif

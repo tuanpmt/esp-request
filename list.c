@@ -106,6 +106,28 @@ list_t *list_set_key(list_t *root, const char *key, const char *value)
     strcpy(new_key->value, value);
     return new_key;
 }
+list_t *list_get_key(list_t *root, const char *key)
+{
+    list_t *found;
+    if(root == NULL)
+        return NULL;
+    found = root;
+    while(found->next != NULL) {
+        found = found->next;
+        if (strcasecmp(found->key, key) == 0) {
+            return found;
+        }
+    }
+    return NULL;
+}
+int list_check_key(list_t *root, const char *key, const char *value)
+{
+    list_t *found = list_get_key(root, key);
+    if(found && strcasecmp(found->value, value) == 0)
+        return 1;
+    return 0;
+
+}
 list_t *list_set_from_string(list_t *root, const char *data)
 {
     int len = strlen(data);

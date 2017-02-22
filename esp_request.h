@@ -14,31 +14,41 @@ typedef enum {
 	REQ_SET_PATH,
 	REQ_SET_URI,
 	REQ_SET_SECURITY,
-	REQ_SET_POSTFIELDS,
-	REQ_FUNC_DATACB,
-	REQ_FUNC_HEADERCB,
+    REQ_SET_POSTFIELDS,
+	REQ_SET_UPLOAD_LEN,
+    REQ_FUNC_DOWNLOAD_DATA,
+	REQ_FUNC_UPLOAD_DATA,
 	REQ_REDIRECT_FOLLOW
 } REQ_OPTS;
 
-typedef struct {
+typedef struct request_t;
+
+
+typedef int (*download_cb)(struct request_t *req, void *buffer, int len);
+typedef int (*upload_cb)(struct request_t *req, void *buffer, int len);
+
+typedef struct response_t {
+    list_t *header;
+} response_t;
+typedef struct request_t {
 	list_t *opt;
 	list_t *header;
 	SSL_CTX *ctx;
     SSL *ssl;
+    char *buffer;
+    int len;
     int socket;
-    int (*connect)(void *req);
-    int (*write)(void *req, void *data, int len);
-    int (*read)(void *req, void *data, int len);
+    int (*_connect)(struct request_t *req);
+    int (*_read)(struct request_t *req, char *buffer, int len);
+    int (*_write)(struct request_t *req, char *buffer, int len);
+    int (*_close)(struct request_t *req);
+    upload_cb upload_callback;
+    download_cb download_callback;
+    response_t *response;
 } request_t;
 
-typedef struct {
-	request_t *req;
-} response_t;
 
-typedef void (data_cb)(response_t *res, void *buffer, int len);
-typedef void (header_cb)(response_t *res, list_t *header);
-
-request_t *req_init(const char *url);
+request_t *req_new(const char *url);
 void req_setopt(request_t *req, REQ_OPTS opt, void* data);
 void req_clean(request_t *req);
 int req_perform(request_t *req);
