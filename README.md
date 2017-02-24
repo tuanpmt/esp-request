@@ -70,8 +70,8 @@ static void request_task(void *pvParameters)
 - [x] Support URI parser
 - [x] Follow redirect
 - [x] Support SSL
+- [x] Support Set POST Fields (simple)
 - [ ] Support Basic Auth
-- [ ] Support set post field
 - [ ] Support Upload multipart
 - [ ] Support Cookie
 
