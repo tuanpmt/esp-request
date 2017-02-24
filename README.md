@@ -4,7 +4,7 @@
 request *req = req_new("http://uri.com/path/to/file.txt");
 //or
 //request *req = req_new("https://google.com"); //for SSL
-req_setopt(req REQ_SET_HEADER, "header=value");
+req_setopt(req, REQ_SET_HEADER, "header=value");
 req_setopt(req, REQ_SET_METHOD, "POST");
 req_setopt(req, REQ_SET_POSTFIELD, "test=data&test2=data2");
 status = req_perform(req);
