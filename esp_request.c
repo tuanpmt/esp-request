@@ -3,6 +3,7 @@
 #include <strings.h>
 #include "esp_request.h"
 #include "esp_log.h"
+#include "esp_system.h"
 
 #include "lwip/sockets.h"
 #include "lwip/dns.h"
@@ -12,8 +13,6 @@
 #define REQ_TAG "HTTP_REQ"
 
 #define REQ_CHECK(check, log, ret) if(check) {ESP_LOGE(REQ_TAG, log);ret;}
-
-
 
 static int resolve_dns(const char *host, struct sockaddr_in *ip) {
     struct hostent *he;
@@ -70,8 +69,8 @@ static int nossl_connect(request_t *req)
     tv.tv_usec = 0;
     setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
-    ESP_LOGI(REQ_TAG, "[sock=%d],connecting to server IP:%s,Port:%d...",
-             socket, ipaddr_ntoa((const ip_addr_t*)&remote_ip.sin_addr.s_addr), remote_ip.sin_port);
+    ESP_LOGI(REQ_TAG, "[sock=%d],connecting to server IP:%s,Port:%s...",
+             socket, ipaddr_ntoa((const ip_addr_t*)&remote_ip.sin_addr.s_addr), (char*)port->value);
     if(connect(socket, (struct sockaddr *)(&remote_ip), sizeof(struct sockaddr)) != 0) {
         close(socket);
         return -1;
@@ -81,7 +80,7 @@ static int nossl_connect(request_t *req)
 }
 static int ssl_connect(request_t *req)
 {
-    req->socket = nossl_connect(req);
+    nossl_connect(req);
     REQ_CHECK(req->socket < 0, "socket failed", return -1);
 
     //TODO: Check
@@ -112,6 +111,10 @@ static int nossl_read(request_t *req, char *buffer, int len)
 }
 static int ssl_close(request_t *req)
 {
+    SSL_shutdown(req->ssl);
+    SSL_free(req->ssl);
+    close(req->socket);
+    SSL_CTX_free(req->ctx);
     return 0;
 }
 
@@ -382,7 +385,7 @@ static int req_process_download(request_t *req)
 
     } while(req->buffer->at_eof == 0);
 
-    ESP_LOGI(REQ_TAG, "datalen=%d", data_len);
+    ESP_LOGI(REQ_TAG, "datalen=%d, freeme=%d", data_len, esp_get_free_heap_size());
     return 0;
 }
 int req_perform(request_t *req)
