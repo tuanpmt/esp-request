@@ -2,15 +2,39 @@
 ## Example 
 
 ```cpp
-request *req = req_new("http://uri.com/path/to/file.txt");
-//or
-//request *req = req_new("https://google.com"); //for SSL
-req_setopt(req, REQ_SET_HEADER, "header=value");
-req_setopt(req, REQ_SET_METHOD, "POST");
-req_setopt(req, REQ_SET_POSTFIELD, "test=data&test2=data2");
-status = req_perform(req);
-printf("HTTP response status code = %d\r\n", status);
-req_cleanup(req);
+int download_callback(request_t *req, char *data, int len)
+{
+    list_t *found = req->response->header;
+    while(found->next != NULL) {
+        found = found->next;
+        ESP_LOGI(TAG,"Response header %s:%s", (char*)found->key, (char*)found->value);
+    }
+    //or 
+    found = list_get_key(req->response->header, "Content-Length");
+    if(found) {
+        ESP_LOGI(TAG,"Get header %s:%s", (char*)found->key, (char*)found->value);
+    }
+    ESP_LOGI(TAG,"%s", data);
+    return 0;
+}
+static void request_task(void *pvParameters)
+{
+    request_t *req;
+    int status;
+    xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT, false, true, portMAX_DELAY);
+    ESP_LOGI(TAG, "Connected to AP, freemem=%d",esp_get_free_heap_size());
+    // vTaskDelay(1000/portTICK_RATE_MS);
+    req = req_new("http://httpbin.org/post"); 
+    //or
+    //request *req = req_new("https://google.com"); //for SSL
+    req_setopt(req, REQ_SET_METHOD, "POST");
+    req_setopt(req, REQ_SET_POSTFIELDS, "test=data&test2=data2");
+    req_setopt(req, REQ_FUNC_DOWNLOAD_CB, download_callback);
+    status = req_perform(req);
+    req_clean(req);
+    vTaskDelete(NULL);
+}
+
 ```
 
 ## Usage 
