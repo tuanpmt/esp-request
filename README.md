@@ -50,5 +50,9 @@ req_cleanup(req);
 - [ ] Support Upload multipart
 - [ ] Support Cookie
 
+## Known Issues 
+- Memory leak
+- Uri parse need more work
+
 ## Authors
 - [Tuan PM](https://twitter.com/tuanpmt)
