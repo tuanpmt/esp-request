@@ -248,6 +248,7 @@ void req_setopt(request_t *req, REQ_OPTS opt, void* data)
             list_set_key(req->opt, "postfield", data);
             list_set_key(req->header, "Content-Type", "application/x-www-form-urlencoded");
             list_set_key(req->header, "Content-Length", len_str);
+            list_set_key(req->opt, "POST", data);
             break;
         case REQ_FUNC_UPLOAD_CB:
             req->upload_callback = data;
