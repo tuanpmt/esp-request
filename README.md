@@ -1,5 +1,5 @@
-# Simple and Powerful HTTP client for ESP32 
-
+# Lightweight HTTP client for ESP32 
+## Example 
 ```cpp
 int upload_cb(request_t *req, char *buffer, int len)
 {
@@ -14,9 +14,9 @@ status = req_perform(req);
 req_cleanup(req);
 ```
 
-# Todo 
+## Todo  
+- [x] Follow redirect
 - [ ] Support SSL
-- [ ] Follow redirect
 - [ ] Support Basic Auth
 - [ ] Support set post field
 - [ ] Support Upload multipart
