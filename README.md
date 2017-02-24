@@ -16,6 +16,11 @@ status = req_perform(req);
 req_cleanup(req);
 ```
 
+## Usage 
+- Create ESP-IDF application https://github.com/espressif/esp-idf-template
+- Clone `git clone https://github.com/tuanpmt/esp-request components/esp-request`
+- Example esp-request application: https://github.com/tuanpmt/esp-request-app
+
 ## Todo  
 - [x] Follow redirect
 - [x] Support SSL
