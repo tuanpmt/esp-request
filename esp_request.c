@@ -1,3 +1,8 @@
+/*
+* @2017
+* Tuan PM <tuanpm at live dot com>
+*/
+
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
