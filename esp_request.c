@@ -76,6 +76,7 @@ static int nossl_connect(request_t *req)
         close(socket);
         return -1;
     }
+    req->socket = socket;
     return socket;
 }
 static int ssl_connect(request_t *req)
@@ -120,11 +121,10 @@ static int nossl_close(request_t *req)
 }
 static int req_setopt_from_uri(request_t *req, const char* uri)
 {
+    //TODO: relative path
     parsed_uri_t *puri;
     char port[] = "443";
-    ESP_LOGI(REQ_TAG, "Parse");
     puri = parse_uri(uri);
-    ESP_LOGI(REQ_TAG, "done");
     REQ_CHECK(puri == NULL, "Error parse uri", return -1);
 
     if(strcasecmp(puri->scheme, "https") == 0) {
@@ -152,7 +152,7 @@ static int req_setopt_from_uri(request_t *req, const char* uri)
     } else {
         req_setopt(req, REQ_SET_PORT, port);
     }
-    // free_parsed_uri(puri);
+    free_parsed_uri(puri);
     return 0;
 }
 request_t *req_new(const char *uri)
@@ -174,6 +174,15 @@ request_t *req_new(const char *uri)
     memset(req->opt, 0, sizeof(list_t));
     req->header = malloc(sizeof(list_t));
     memset(req->header, 0, sizeof(list_t));
+
+    req->response = malloc(sizeof(response_t));
+    REQ_CHECK(req->response == NULL, "Error create response", return NULL);
+    memset(req->response, 0, sizeof(response_t));
+
+    req->response->header = malloc(sizeof(list_t));
+    REQ_CHECK(req->response->header == NULL, "Error create response header", return NULL);
+    memset(req->response->header, 0, sizeof(list_t));
+
 
     req_setopt_from_uri(req, uri);
 
@@ -286,7 +295,7 @@ static int fill_buffer(request_t *req)
         req->buffer->bytes_write = bytes_inside_buffer;
         if(req->buffer->bytes_write < 0)
             req->buffer->bytes_write = 0;
-        ESP_LOGI(REQ_TAG, "move=%d, write=%d, read=%d", bytes_inside_buffer, req->buffer->bytes_write, req->buffer->bytes_read);
+        // ESP_LOGI(REQ_TAG, "move=%d, write=%d, read=%d", bytes_inside_buffer, req->buffer->bytes_write, req->buffer->bytes_read);
     }
     if(!req->buffer->at_eof)
     {
@@ -316,7 +325,7 @@ static int fill_buffer(request_t *req)
 static char *req_readline(request_t *req)
 {
     char *cr, *ret = NULL;
-    if(req->buffer->bytes_read + 2> req->buffer->bytes_write) {
+    if(req->buffer->bytes_read + 2 > req->buffer->bytes_write) {
         return NULL;
     }
     cr = strstr(req->buffer->data + req->buffer->bytes_read, "\r\n");
@@ -326,65 +335,91 @@ static char *req_readline(request_t *req)
     memset(cr, 0, 2);
     ret = req->buffer->data + req->buffer->bytes_read;
     req->buffer->bytes_read += (cr - (req->buffer->data + req->buffer->bytes_read)) + 2;
-    ESP_LOGD(REQ_TAG, "next offset=%d", req->buffer->bytes_read);
+    // ESP_LOGD(REQ_TAG, "next offset=%d", req->buffer->bytes_read);
     return ret;
 }
 static int req_process_download(request_t *req)
 {
     int process_header = 1, data_len = 0;
-    char *line, *data_ptr = NULL;
-    // req->response = calloc(1, sizeof(response_t));
-    // req->response->header = calloc(1, sizeof(list_t));
+    char *line;
+    req->response->status_code = -1;
     reset_buffer(req);
+    list_clear(req->response->header);
     do {
-
         fill_buffer(req);
         if(process_header) {
             while((line = req_readline(req)) != NULL) {
                 if(line[0] == 0) {
-                    ESP_LOGI(REQ_TAG, "end process_idx=%d", req->buffer->bytes_read);
+                    // ESP_LOGI(REQ_TAG, "end process_idx=%d", req->buffer->bytes_read);
                     process_header = 0; //end of http header
                     break;
                 } else {
-                    ESP_LOGI(REQ_TAG, "Line=%s", line);
+                    if(req->response->status_code < 0) {
+                        char *temp = strstr(line, "HTTP/1.");
+                        if(temp) {
+                            char statusCode[4] = { 0 };
+                            memcpy(statusCode, temp + 9, 3);
+                            req->response->status_code = atoi(statusCode);
+                        }
+                    } else {
+                        list_set_from_string(req->response->header, line);
+                    }
                 }
             }
         }
 
         if(process_header == 0)
         {
+            if(req->buffer->at_eof) {
+                fill_buffer(req);
+            }
             data_len += req->buffer->bytes_write;
-            ESP_LOGI(REQ_TAG, "data=%s", req->buffer->data);
             req->buffer->bytes_read = req->buffer->bytes_write;
+            if(req->download_callback) {
+                req->download_callback(req, (void *)req->buffer->data, req->buffer->bytes_write);
+            }
         }
 
     } while(req->buffer->at_eof == 0);
+
     ESP_LOGI(REQ_TAG, "datalen=%d", data_len);
     return 0;
 }
 int req_perform(request_t *req)
 {
-    int status_code = -1;
 
     do {
         REQ_CHECK(req->_connect(req) < 0, "Error connnect", break);
-        REQ_CHECK((status_code = req_process_upload(req)) < 0, "Error send request", break);
+        REQ_CHECK(req_process_upload(req) < 0, "Error send request", break);
+        REQ_CHECK(req_process_download(req) < 0, "Error download", break);
 
-        status_code = req_process_download(req);
-
-        if((status_code == 301 || status_code == 302) && list_check_key(req->opt, "follow", "true")) {
-            continue;
+        if((req->response->status_code == 301 || req->response->status_code == 302) && list_check_key(req->opt, "follow", "true")) {
+            list_t *found = list_get_key(req->response->header, "Location");
+            if(found) {
+                list_set_key(req->header, "Referer", (const char*)found->value);
+                req_setopt_from_uri(req, (const char*)found->value);
+                ESP_LOGI(REQ_TAG, "Following: %s", (char*)found->value);
+                req->_close(req);
+                continue;
+            }
+            break;
         } else {
             break;
         }
     } while(1);
     req->_close(req);
-    return status_code;
+    return req->response->status_code;
 }
 
 void req_clean(request_t *req)
 {
     list_clear(req->opt);
     list_clear(req->header);
+    list_clear(req->response->header);
+    free(req->opt);
+    free(req->header);
+    free(req->response);
+    free(req->buffer->data);
+    free(req->buffer);
     free(req);
 }

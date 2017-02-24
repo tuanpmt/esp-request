@@ -192,13 +192,9 @@ parsed_uri_t *parse_uri(char *url)
         puri->password = NULL;
     }
     if (puri->path && puri->path[0]!= 0){
-        printf("line=%d,  %s\n", __LINE__, puri->path);
         char *temp = malloc(strlen(puri->path) + 2);
         sprintf(temp, "/%s", puri->path);
-        printf("line=%d,  %s\n", __LINE__, temp);
         puri->path = temp;
-        // puri->path = calloc(1, 10);
-        // sprintf(puri->path, "/headers");
     } else {
         puri->path = malloc(2);
         puri->path[0] = '/';
@@ -258,6 +254,9 @@ void parse_uri_info(parsed_uri_t *puri)
 void free_parsed_uri(parsed_uri_t *puri)
 {
     if(NULL != puri) {
+        if(puri->path && puri->path[0] != 0) {
+            free(puri->path);
+        }
         if(NULL != puri->_uri) {
             free(puri->_uri);
         }

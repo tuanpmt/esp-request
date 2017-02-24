@@ -30,6 +30,7 @@ typedef int (*upload_cb)(struct request_t *req, void *buffer, int len);
 
 typedef struct response_t {
     list_t *header;
+    int status_code;
 } response_t;
 
 typedef struct {

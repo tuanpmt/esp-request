@@ -48,24 +48,22 @@ list_t *list_get_first(list_t *root)
         return NULL;
     if(root->next == NULL)
         return NULL;
+    // ESP_LOGI(LIST_TAG, "root->next = %x", (int)root->next);
     return root->next;
 }
-void list_remove(list_t *root, list_t *tree)
+void list_remove(list_t *tree)
 {
-	list_t *found = root;
-	while (found != NULL) {
-		if (found == tree) {
-			break;
-		}
-		found = found->next;
-	}
-	if (found != NULL && found != root) {
+	list_t *found = tree;
+	if (found != NULL) {
 		if (found->next && found->prev) {
+            // ESP_LOGI(LIST_TAG, "found->prev->next= %x, found->next->prev=%x", (int)found->prev->next, (int)found->next->prev);
 			found->prev->next = found->next;
 			found->next->prev = found->prev;
 		} else if (found->next) {
+            // ESP_LOGI(LIST_TAG, "found->next->prev= %x", (int)found->next->prev);
 			found->next->prev = NULL;
 		} else if (found->prev) {
+            // ESP_LOGI(LIST_TAG, "found->prev->next =%x", (int)found->prev->next);
 			found->prev->next = NULL;
 		}
 		free(found);
@@ -77,7 +75,10 @@ void list_clear(list_t *root)
     //FIXME: Need to test this function
     list_t *found;
     while((found = list_get_first(root)) != NULL) {
-        list_remove(root, found);
+        // ESP_LOGI(LIST_TAG, "free key=%s, value=%s, found=%x", (char*)found->key, (char*)found->value, (int)found);
+        free(found->key);
+        free(found->value);
+        list_remove(found);
     }
 }
 
@@ -98,15 +99,16 @@ list_t *list_set_key(list_t *root, const char *key, const char *value)
             return found;
         }
     }
-    list_t *new_key = calloc(1, sizeof(list_t));
-    if (new_key == NULL)
+    list_t *new_tree = calloc(1, sizeof(list_t));
+    if (new_tree == NULL)
         return NULL;
-    new_key->key = calloc(1, strlen(key) + 1);
-    strcpy(new_key->key, key);
-    new_key->value = calloc(1, strlen(value)+1);
-    strcpy(new_key->value, value);
-    found->next = new_key;
-    return new_key;
+    new_tree->key = calloc(1, strlen(key) + 1);
+    strcpy(new_tree->key, key);
+    new_tree->value = calloc(1, strlen(value)+1);
+    strcpy(new_tree->value, value);
+
+    list_add(root, new_tree);
+    return new_tree;
 }
 list_t *list_get_key(list_t *root, const char *key)
 {
