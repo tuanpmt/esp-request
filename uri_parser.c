@@ -45,7 +45,7 @@ char *str_end_with(char *str, char *end, int max_char)
     return NULL;
 }
 #define JUMP_NEXT_STATE(var, state) { *curr_ptr = 0; curr_ptr ++; var = curr_ptr; parse_state = state; break;}
-parsed_uri_t *parse_uri(const char *url)
+parsed_uri_t *parse_uri(char *url)
 {
     parsed_uri_t *puri;
     char *curr_ptr;
@@ -60,12 +60,14 @@ parsed_uri_t *parse_uri(const char *url)
         PARSE_QUERY,
         PARSE_FRAGMENT
     } parse_state = 0;
-    puri = (parsed_uri_t *)calloc(1, sizeof(parsed_uri_t));
+    puri = (parsed_uri_t *)malloc(sizeof(parsed_uri_t));
+    memset(puri, 0, sizeof(parsed_uri_t));
     if(NULL == puri) {
         return NULL;
     }
     puri->_uri_len = strlen(url);
-    puri->_uri = (char*) calloc(1, puri->_uri_len + 1);
+    puri->_uri = (char*) malloc(puri->_uri_len + 1);
+    memset(puri->_uri, 0, puri->_uri_len + 1);
     if(puri->_uri == NULL) {
         free_parsed_uri(puri);
         return NULL;
@@ -189,9 +191,19 @@ parsed_uri_t *parse_uri(const char *url)
         puri->username = NULL;
         puri->password = NULL;
     }
-    puri->extension = str_end_with(puri->path, ".", 5); //.opus
-    puri->host_ext = str_end_with(puri->host, ".", 5); //.opus
-
+    if (puri->path && puri->path[0]!= 0){
+        printf("line=%d,  %s\n", __LINE__, puri->path);
+        char *temp = malloc(strlen(puri->path) + 2);
+        sprintf(temp, "/%s", puri->path);
+        printf("line=%d,  %s\n", __LINE__, temp);
+        puri->path = temp;
+        // puri->path = calloc(1, 10);
+        // sprintf(puri->path, "/headers");
+    } else {
+        puri->path = malloc(2);
+        puri->path[0] = '/';
+        puri->path[1] = 0;
+    }
     return puri;
 }
 void parse_uri_info(parsed_uri_t *puri)

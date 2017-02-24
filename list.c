@@ -2,7 +2,8 @@
 #include <string.h>
 #include <ctype.h>
 #include "list.h"
-
+#include "esp_log.h"
+#define LIST_TAG "LIST"
 static char *trimwhitespace(char *str)
 {
   char *end;
@@ -104,6 +105,7 @@ list_t *list_set_key(list_t *root, const char *key, const char *value)
     strcpy(new_key->key, key);
     new_key->value = calloc(1, strlen(value)+1);
     strcpy(new_key->value, value);
+    found->next = new_key;
     return new_key;
 }
 list_t *list_get_key(list_t *root, const char *key)
