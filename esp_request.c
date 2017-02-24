@@ -203,6 +203,8 @@ request_t *req_new(const char *uri)
 
 void req_setopt(request_t *req, REQ_OPTS opt, void* data)
 {
+    int post_len;
+    char len_str[10] = {0};
     switch(opt) {
         case REQ_SET_METHOD:
             list_set_key(req->opt, "method", data);
@@ -240,8 +242,18 @@ void req_setopt(request_t *req, REQ_OPTS opt, void* data)
 
             break;
         case REQ_SET_POSTFIELDS:
-        case REQ_FUNC_UPLOAD_DATA:
-        case REQ_FUNC_DOWNLOAD_DATA:
+            post_len = strlen((char*)data);
+            sprintf(len_str, "%d", post_len);
+
+            list_set_key(req->opt, "postfield", data);
+            list_set_key(req->header, "Content-Type", "application/x-www-form-urlencoded");
+            list_set_key(req->header, "Content-Length", len_str);
+            break;
+        case REQ_FUNC_UPLOAD_CB:
+            req->upload_callback = data;
+            break;
+        case REQ_FUNC_DOWNLOAD_CB:
+            req->download_callback = data;
             break;
         case REQ_REDIRECT_FOLLOW:
             list_set_key(req->opt, "follow", data);
@@ -273,6 +285,12 @@ static int req_process_upload(request_t *req)
     tx_write_len += sprintf(req->buffer->data + tx_write_len, "\r\n");
     REQ_CHECK(req->_write(req, req->buffer->data, tx_write_len) < 0, "Error write header", return -1);
 
+    found = list_get_key(req->opt, "postfield");
+    if(found) {
+        ESP_LOGI(REQ_TAG, "Write data len=%d", strlen((char*)found->value));
+        REQ_CHECK(req->_write(req, (char*)found->value, strlen((char*)found->value)) < 0, "Error write post field", return -1);
+    }
+
     if(req->upload_callback) {
         while((tx_write_len = req->upload_callback(req, (void *)req->buffer->data, REQ_BUFFER_LEN)) > 0) {
             REQ_CHECK(req->_write(req, req->buffer->data, tx_write_len) < 0, "Error write data", return -1);
@@ -288,13 +306,12 @@ static int reset_buffer(request_t *req)
     req->buffer->at_eof = 0;
     return 0;
 }
+
 static int fill_buffer(request_t *req)
 {
     int bread;
     int bytes_inside_buffer = req->buffer->bytes_write - req->buffer->bytes_read;
     int buffer_free_bytes;
-
-
     if(bytes_inside_buffer)
     {
         memmove((void*)req->buffer->data, (void*)(req->buffer->data + req->buffer->bytes_read),
@@ -393,9 +410,9 @@ static int req_process_download(request_t *req)
     ESP_LOGI(REQ_TAG, "datalen=%d, freeme=%d", data_len, esp_get_free_heap_size());
     return 0;
 }
+
 int req_perform(request_t *req)
 {
-
     do {
         REQ_CHECK(req->_connect(req) < 0, "Error connnect", break);
         REQ_CHECK(req_process_upload(req) < 0, "Error send request", break);
