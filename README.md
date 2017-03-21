@@ -50,19 +50,18 @@ static void request_task(void *pvParameters)
 - `req_clean`
 
 ### Options for `req_setopt`  
-- REQ_SET_METHOD
-- REQ_SET_HEADER
-- REQ_SET_HOST
-- REQ_SET_PORT 
-- REQ_SET_PATH
-- REQ_SET_URI
+- REQ_SET_METHOD - `req_setopt(req, REQ_SET_METHOD, "GET");//or POST/PUT/DELETE`
+- REQ_SET_HEADER - `req_setopt(req, REQ_SET_HEADER, "HeaderKey: HeaderValue");`
+- REQ_SET_HOST - `req_setopt(req, REQ_SET_HOST, "google.com"); //or 192.168.0.1`
+- REQ_SET_PORT - `req_setopt(req, REQ_SET_PORT, "80");//must be string`
+- REQ_SET_PATH - `req_setopt(req, REQ_SET_PATH, "/path");`
 - REQ_SET_SECURITY
-- REQ_SET_POSTFIELDS
+- REQ_SET_URI  - `req_setopt(req, REQ_SET_URI, "http://uri.com"); //will replace host, port, path, security and Auth if present`
 - REQ_SET_DATAFIELDS
-- REQ_SET_UPLOAD_LEN
-- REQ_FUNC_DOWNLOAD_CB
+- REQ_SET_UPLOAD_LEN - Not effect for now
+- REQ_FUNC_DOWNLOAD_CB - `req_setopt(req, REQ_FUNC_DOWNLOAD_CB, download_callback);`
 - REQ_FUNC_UPLOAD_CB
-- REQ_REDIRECT_FOLLOW
+- REQ_REDIRECT_FOLLOW - `req_setopt(req, REQ_REDIRECT_FOLLOW, "true"); //or "false"`
 
 ### URI format 
 - Follow this: https://en.wikipedia.org/wiki/Uniform_Resource_Identifier
