@@ -205,6 +205,8 @@ void req_setopt(request_t *req, REQ_OPTS opt, void* data)
 {
     int post_len;
     char len_str[10] = {0};
+    if(!req || !data)
+        return;
     switch(opt) {
         case REQ_SET_METHOD:
             list_set_key(req->opt, "method", data);
@@ -242,11 +244,12 @@ void req_setopt(request_t *req, REQ_OPTS opt, void* data)
 
             break;
         case REQ_SET_POSTFIELDS:
+            list_set_key(req->header, "Content-Type", "application/x-www-form-urlencoded");
+            list_set_key(req->opt, "method", "POST");
+        case REQ_SET_DATAFIELDS:
             post_len = strlen((char*)data);
             sprintf(len_str, "%d", post_len);
-
             list_set_key(req->opt, "postfield", data);
-            list_set_key(req->header, "Content-Type", "application/x-www-form-urlencoded");
             list_set_key(req->header, "Content-Length", len_str);
             break;
         case REQ_FUNC_UPLOAD_CB:
@@ -274,7 +277,7 @@ static int req_process_upload(request_t *req)
 
     found = list_get_key(req->opt, "path");
     REQ_CHECK(found == NULL, "path required", return -1);
-    tx_write_len += sprintf(req->buffer->data + tx_write_len, "%s HTTP/1.1\r\n", (char*)found->value);
+    tx_write_len += sprintf(req->buffer->data + tx_write_len, "/%s HTTP/1.1\r\n", (char*)found->value);
 
     //TODO: Check header len < REQ_BUFFER_LEN
     found = req->header;
@@ -443,6 +446,7 @@ void req_clean(request_t *req)
     list_clear(req->response->header);
     free(req->opt);
     free(req->header);
+    free(req->response->header);
     free(req->response);
     free(req->buffer->data);
     free(req->buffer);

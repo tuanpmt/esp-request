@@ -70,6 +70,8 @@ void list_remove(list_t *tree)
             // ESP_LOGI(LIST_TAG, "found->prev->next =%x", (int)found->prev->next);
 			found->prev->next = NULL;
 		}
+        free(found->key);
+        free(found->value);
 		free(found);
 	}
 }
@@ -80,8 +82,6 @@ void list_clear(list_t *root)
     list_t *found;
     while((found = list_get_first(root)) != NULL) {
         // ESP_LOGI(LIST_TAG, "free key=%s, value=%s, found=%x", (char*)found->key, (char*)found->value, (int)found);
-        free(found->key);
-        free(found->value);
         list_remove(found);
     }
 }
@@ -141,6 +141,7 @@ list_t *list_set_from_string(list_t *root, const char *data)
     int len = strlen(data);
     char* eq_ch = strchr(data, ':');
     int key_len, value_len;
+    list_t *ret = NULL;
 
     if (eq_ch == NULL)
         return NULL;
@@ -152,7 +153,10 @@ list_t *list_set_from_string(list_t *root, const char *data)
     memcpy(key, data, key_len);
     memcpy(value, eq_ch + 1, value_len);
 
-    return list_set_key(root, trimwhitespace(key), trimwhitespace(value));
+    ret = list_set_key(root, trimwhitespace(key), trimwhitespace(value));
+    free(key);
+    free(value);
+    return ret;
 }
 list_t *list_clear_key(list_t *root, const char *key)
 {

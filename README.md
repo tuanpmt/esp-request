@@ -58,6 +58,7 @@ static void request_task(void *pvParameters)
 - REQ_SET_URI
 - REQ_SET_SECURITY
 - REQ_SET_POSTFIELDS
+- REQ_SET_DATAFIELDS
 - REQ_SET_UPLOAD_LEN
 - REQ_FUNC_DOWNLOAD_CB
 - REQ_FUNC_UPLOAD_CB
@@ -76,7 +77,7 @@ static void request_task(void *pvParameters)
 - [ ] Support Cookie
 
 ## Known Issues 
-- Memory leak
+- ~~Memory leak~~
 - Uri parse need more work
 
 ## Authors
