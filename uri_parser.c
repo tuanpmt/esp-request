@@ -170,7 +170,7 @@ parsed_uri_t *parse_uri(char *url)
                 break;
             case PARSE_PATH: /* path */
                 if(*curr_ptr == '?') {
-                    JUMP_NEXT_STATE(puri->query, PARSE_QUERY);
+                    // JUMP_NEXT_STATE(puri->query, PARSE_QUERY);
                 } else if(*curr_ptr == '#') {
                     JUMP_NEXT_STATE(puri->fragment, PARSE_FRAGMENT);
                 }

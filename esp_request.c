@@ -277,7 +277,7 @@ static int req_process_upload(request_t *req)
 
     found = list_get_key(req->opt, "path");
     REQ_CHECK(found == NULL, "path required", return -1);
-    tx_write_len += sprintf(req->buffer->data + tx_write_len, "/%s HTTP/1.1\r\n", (char*)found->value);
+    tx_write_len += sprintf(req->buffer->data + tx_write_len, "%s HTTP/1.1\r\n", (char*)found->value);
 
     //TODO: Check header len < REQ_BUFFER_LEN
     found = req->header;
@@ -286,6 +286,9 @@ static int req_process_upload(request_t *req)
         tx_write_len += sprintf(req->buffer->data + tx_write_len, "%s: %s\r\n", (char*)found->key, (char*)found->value);
     }
     tx_write_len += sprintf(req->buffer->data + tx_write_len, "\r\n");
+
+    ESP_LOGI(REQ_TAG, "Request = %s", req->buffer->data);
+
     REQ_CHECK(req->_write(req, req->buffer->data, tx_write_len) < 0, "Error write header", return -1);
 
     found = list_get_key(req->opt, "postfield");
@@ -323,7 +326,7 @@ static int fill_buffer(request_t *req)
         req->buffer->bytes_write = bytes_inside_buffer;
         if(req->buffer->bytes_write < 0)
             req->buffer->bytes_write = 0;
-        // ESP_LOGI(REQ_TAG, "move=%d, write=%d, read=%d", bytes_inside_buffer, req->buffer->bytes_write, req->buffer->bytes_read);
+        ESP_LOGI(REQ_TAG, "move=%d, write=%d, read=%d", bytes_inside_buffer, req->buffer->bytes_write, req->buffer->bytes_read);
     }
     if(!req->buffer->at_eof)
     {
@@ -334,14 +337,16 @@ static int fill_buffer(request_t *req)
         }
         buffer_free_bytes = REQ_BUFFER_LEN - req->buffer->bytes_write;
         bread = req->_read(req, (void*)(req->buffer->data + req->buffer->bytes_write), buffer_free_bytes);
-        if(bread <= 0) {
+        ESP_LOGI(REQ_TAG, "bread = %d, bytes_write = %d, buffer_free_bytes = %d", bread, req->buffer->bytes_write, buffer_free_bytes);
+
+        if(bread < 0) {
             req->buffer->at_eof = 1;
             return -1;
         }
         req->buffer->bytes_write += bread;
         req->buffer->data[req->buffer->bytes_write] = 0;//terminal string
 
-        if(bread != buffer_free_bytes) {
+        if(bread == 0) {
             req->buffer->at_eof = 1;
         }
     }
@@ -368,7 +373,7 @@ static char *req_readline(request_t *req)
 }
 static int req_process_download(request_t *req)
 {
-    int process_header = 1, data_len = 0;
+    int process_header = 1, data_len = 0, header_off = 0;
     char *line;
     req->response->status_code = -1;
     reset_buffer(req);
@@ -378,7 +383,8 @@ static int req_process_download(request_t *req)
         if(process_header) {
             while((line = req_readline(req)) != NULL) {
                 if(line[0] == 0) {
-                    // ESP_LOGI(REQ_TAG, "end process_idx=%d", req->buffer->bytes_read);
+                    ESP_LOGI(REQ_TAG, "end process_idx=%d", req->buffer->bytes_read);
+                    header_off = req->buffer->bytes_read;
                     process_header = 0; //end of http header
                     break;
                 } else {
@@ -388,23 +394,30 @@ static int req_process_download(request_t *req)
                             char statusCode[4] = { 0 };
                             memcpy(statusCode, temp + 9, 3);
                             req->response->status_code = atoi(statusCode);
+                            ESP_LOGI( REQ_TAG, "status code: %d", req->response->status_code );
                         }
                     } else {
                         list_set_from_string(req->response->header, line);
+                        ESP_LOGI( REQ_TAG, "header line: %s", line);
                     }
                 }
             }
         }
 
+        ESP_LOGI( REQ_TAG, "pre cb at eof?: %d", req->buffer->at_eof );
         if(process_header == 0)
         {
             if(req->buffer->at_eof) {
                 fill_buffer(req);
+                ESP_LOGI( REQ_TAG, "at eof?: %d", req->buffer->at_eof );
             }
             data_len += req->buffer->bytes_write;
+            ESP_LOGI( REQ_TAG, "data_len: %d", data_len );
             req->buffer->bytes_read = req->buffer->bytes_write;
-            if(req->download_callback) {
-                if(req->download_callback(req, (void *)req->buffer->data, req->buffer->bytes_write) < 0) break;
+
+            if(req->download_callback && ( req->buffer->bytes_write - header_off ) != 0) {
+                if(req->download_callback(req, (void *)(req->buffer->data + header_off), req->buffer->bytes_write - header_off) < 0) break;
+                header_off = 0;
             }
         }
 
