@@ -414,8 +414,9 @@ static int req_process_download(request_t *req)
             data_len += req->buffer->bytes_write;
             ESP_LOGI( REQ_TAG, "data_len: %d", data_len );
             req->buffer->bytes_read = req->buffer->bytes_write;
+
             if(req->download_callback && ( req->buffer->bytes_write - header_off ) != 0) {
-                req->download_callback(req, (void *)(req->buffer->data + header_off), req->buffer->bytes_write - header_off);
+                if(req->download_callback(req, (void *)(req->buffer->data + header_off), req->buffer->bytes_write - header_off) < 0) break;
                 header_off = 0;
             }
         }
