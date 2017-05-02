@@ -337,7 +337,7 @@ static int fill_buffer(request_t *req)
         }
         buffer_free_bytes = REQ_BUFFER_LEN - req->buffer->bytes_write;
         bread = req->_read(req, (void*)(req->buffer->data + req->buffer->bytes_write), buffer_free_bytes);
-        ESP_LOGI(REQ_TAG, "bread = %d, bytes_write = %d, buffer_free_bytes = %d", bread, req->buffer->bytes_write, buffer_free_bytes);
+        // ESP_LOGI(REQ_TAG, "bread = %d, bytes_write = %d, buffer_free_bytes = %d", bread, req->buffer->bytes_write, buffer_free_bytes);
 
         if(bread < 0) {
             req->buffer->at_eof = 1;
@@ -373,7 +373,7 @@ static char *req_readline(request_t *req)
 }
 static int req_process_download(request_t *req)
 {
-    int process_header = 1, data_len = 0, header_off = 0;
+    int process_header = 1, header_off = 0;
     char *line;
     req->response->status_code = -1;
     reset_buffer(req);
@@ -404,26 +404,21 @@ static int req_process_download(request_t *req)
             }
         }
 
-        ESP_LOGI( REQ_TAG, "pre cb at eof?: %d", req->buffer->at_eof );
         if(process_header == 0)
         {
             if(req->buffer->at_eof) {
                 fill_buffer(req);
-                ESP_LOGI( REQ_TAG, "at eof?: %d", req->buffer->at_eof );
             }
-            data_len += req->buffer->bytes_write;
-            ESP_LOGI( REQ_TAG, "data_len: %d", data_len );
+
             req->buffer->bytes_read = req->buffer->bytes_write;
 
             if(req->download_callback && ( req->buffer->bytes_write - header_off ) != 0) {
                 if(req->download_callback(req, (void *)(req->buffer->data + header_off), req->buffer->bytes_write - header_off) < 0) break;
-                header_off = 0;
             }
+            header_off = 0;
         }
 
     } while(req->buffer->at_eof == 0);
-
-    ESP_LOGI(REQ_TAG, "datalen=%d, freeme=%d", data_len, esp_get_free_heap_size());
     return 0;
 }
 
