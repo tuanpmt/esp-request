@@ -404,7 +404,7 @@ static int req_process_download(request_t *req)
             data_len += req->buffer->bytes_write;
             req->buffer->bytes_read = req->buffer->bytes_write;
             if(req->download_callback) {
-                req->download_callback(req, (void *)req->buffer->data, req->buffer->bytes_write);
+                if(req->download_callback(req, (void *)req->buffer->data, req->buffer->bytes_write) < 0) break;
             }
         }
 
