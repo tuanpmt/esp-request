@@ -40,7 +40,8 @@ static void request_task(void *pvParameters)
 ## Usage 
 - Create ESP-IDF application https://github.com/espressif/esp-idf-template
 - Clone `git submodule add https://github.com/tuanpmt/esp-request components/esp-request`
-- Example esp-request application: https://github.com/tuanpmt/esp-request-app
+- Example `esp-request` application: https://github.com/tuanpmt/esp-request-app
+- OTA application using `esp-request`: https://github.com/tuanpmt/esp32-fota
 
 ## API 
 
