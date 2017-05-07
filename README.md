@@ -4,13 +4,13 @@
 ```cpp
 int download_callback(request_t *req, char *data, int len)
 {
-    list_t *found = req->response->header;
+    req_list_t *found = req->response->header;
     while(found->next != NULL) {
         found = found->next;
         ESP_LOGI(TAG,"Response header %s:%s", (char*)found->key, (char*)found->value);
     }
     //or 
-    found = list_get_key(req->response->header, "Content-Length");
+    found = req_list_get_key(req->response->header, "Content-Length");
     if(found) {
         ESP_LOGI(TAG,"Get header %s:%s", (char*)found->key, (char*)found->value);
     }
