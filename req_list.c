@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include "list.h"
+#include "req_list.h"
 #include "esp_log.h"
 #define LIST_TAG "LIST"
 static char *trimwhitespace(char *str)
@@ -27,17 +27,17 @@ static char *trimwhitespace(char *str)
 
   return str;
 }
-void list_add(list_t *root, list_t *new_tree)
+void req_list_add(req_list_t *root, req_list_t *new_tree)
 {
-    list_t *last = list_get_last(root);
+    req_list_t *last = req_list_get_last(root);
     if(last != NULL) {
         last->next = new_tree;
         new_tree->prev = last;
     }
 }
-list_t *list_get_last(list_t *root)
+req_list_t *req_list_get_last(req_list_t *root)
 {
-    list_t *last;
+    req_list_t *last;
     if(root == NULL)
         return NULL;
     last = root;
@@ -46,7 +46,7 @@ list_t *list_get_last(list_t *root)
     }
     return last;
 }
-list_t *list_get_first(list_t *root)
+req_list_t *req_list_get_first(req_list_t *root)
 {
     if(root == NULL)
         return NULL;
@@ -55,9 +55,9 @@ list_t *list_get_first(list_t *root)
     // ESP_LOGI(LIST_TAG, "root->next = %x", (int)root->next);
     return root->next;
 }
-void list_remove(list_t *tree)
+void req_list_remove(req_list_t *tree)
 {
-	list_t *found = tree;
+	req_list_t *found = tree;
 	if (found != NULL) {
 		if (found->next && found->prev) {
             // ESP_LOGI(LIST_TAG, "found->prev->next= %x, found->next->prev=%x", (int)found->prev->next, (int)found->next->prev);
@@ -76,19 +76,19 @@ void list_remove(list_t *tree)
 	}
 }
 
-void list_clear(list_t *root)
+void req_list_clear(req_list_t *root)
 {
     //FIXME: Need to test this function
-    list_t *found;
-    while((found = list_get_first(root)) != NULL) {
+    req_list_t *found;
+    while((found = req_list_get_first(root)) != NULL) {
         // ESP_LOGI(LIST_TAG, "free key=%s, value=%s, found=%x", (char*)found->key, (char*)found->value, (int)found);
-        list_remove(found);
+        req_list_remove(found);
     }
 }
 
-list_t *list_set_key(list_t *root, const char *key, const char *value)
+req_list_t *req_list_set_key(req_list_t *root, const char *key, const char *value)
 {
-    list_t *found;
+    req_list_t *found;
     if(root == NULL)
         return NULL;
     found = root;
@@ -103,7 +103,7 @@ list_t *list_set_key(list_t *root, const char *key, const char *value)
             return found;
         }
     }
-    list_t *new_tree = calloc(1, sizeof(list_t));
+    req_list_t *new_tree = calloc(1, sizeof(req_list_t));
     if (new_tree == NULL)
         return NULL;
     new_tree->key = calloc(1, strlen(key) + 1);
@@ -111,12 +111,12 @@ list_t *list_set_key(list_t *root, const char *key, const char *value)
     new_tree->value = calloc(1, strlen(value)+1);
     strcpy(new_tree->value, value);
 
-    list_add(root, new_tree);
+    req_list_add(root, new_tree);
     return new_tree;
 }
-list_t *list_get_key(list_t *root, const char *key)
+req_list_t *req_list_get_key(req_list_t *root, const char *key)
 {
-    list_t *found;
+    req_list_t *found;
     if(root == NULL)
         return NULL;
     found = root;
@@ -128,20 +128,20 @@ list_t *list_get_key(list_t *root, const char *key)
     }
     return NULL;
 }
-int list_check_key(list_t *root, const char *key, const char *value)
+int req_list_check_key(req_list_t *root, const char *key, const char *value)
 {
-    list_t *found = list_get_key(root, key);
+    req_list_t *found = req_list_get_key(root, key);
     if(found && strcasecmp(found->value, value) == 0)
         return 1;
     return 0;
 
 }
-list_t *list_set_from_string(list_t *root, const char *data)
+req_list_t *req_list_set_from_string(req_list_t *root, const char *data)
 {
     int len = strlen(data);
     char* eq_ch = strchr(data, ':');
     int key_len, value_len;
-    list_t *ret = NULL;
+    req_list_t *ret = NULL;
 
     if (eq_ch == NULL)
         return NULL;
@@ -153,12 +153,12 @@ list_t *list_set_from_string(list_t *root, const char *data)
     memcpy(key, data, key_len);
     memcpy(value, eq_ch + 1, value_len);
 
-    ret = list_set_key(root, trimwhitespace(key), trimwhitespace(value));
+    ret = req_list_set_key(root, trimwhitespace(key), trimwhitespace(value));
     free(key);
     free(value);
     return ret;
 }
-list_t *list_clear_key(list_t *root, const char *key)
+req_list_t *req_list_clear_key(req_list_t *root, const char *key)
 {
     return NULL;
 }

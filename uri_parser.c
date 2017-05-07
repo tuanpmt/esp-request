@@ -45,7 +45,7 @@ char *str_end_with(char *str, char *end, int max_char)
     return NULL;
 }
 #define JUMP_NEXT_STATE(var, state) { *curr_ptr = 0; curr_ptr ++; var = curr_ptr; parse_state = state; break;}
-parsed_uri_t *parse_uri(char *url)
+parsed_uri_t *parse_uri(const char *url)
 {
     parsed_uri_t *puri;
     char *curr_ptr;

@@ -14,6 +14,7 @@
 #include "lwip/dns.h"
 #include "lwip/netdb.h"
 #include "lwip/igmp.h"
+#include "req_list.h"
 
 #define REQ_TAG "HTTP_REQ"
 
@@ -44,10 +45,10 @@ static int nossl_connect(request_t *req)
     int socket;
     struct sockaddr_in remote_ip;
     struct timeval tv;
-    list_t *host, *port, *timeout;
+    req_list_t *host, *port, *timeout;
     bzero(&remote_ip, sizeof(struct sockaddr_in));
     //if stream_host is not ip address, resolve it AF_INET,servername,&serveraddr.sin_addr
-    host = list_get_key(req->opt, "host");
+    host = req_list_get_key(req->opt, "host");
     REQ_CHECK(host == NULL, "host = NULL", return -1);
 
     if(inet_pton(AF_INET, (const char*)host->value, &remote_ip.sin_addr) != 1) {
@@ -59,7 +60,7 @@ static int nossl_connect(request_t *req)
     socket = socket(PF_INET, SOCK_STREAM, 0);
     REQ_CHECK(socket < 0, "socket failed", return -1);
 
-    port = list_get_key(req->opt, "port");
+    port = req_list_get_key(req->opt, "port");
     if(port == NULL)
         return -1;
 
@@ -67,7 +68,7 @@ static int nossl_connect(request_t *req)
     remote_ip.sin_port = htons(atoi(port->value));
 
     tv.tv_sec = 10; //default timeout is 10 seconds
-    timeout = list_get_key(req->opt, "timeout");
+    timeout = req_list_get_key(req->opt, "timeout");
     if(timeout) {
         tv.tv_sec = atoi(timeout->value);
     }
@@ -178,18 +179,18 @@ request_t *req_new(const char *uri)
     //TODO: Free req before return
     REQ_CHECK(req->buffer->data == NULL, "Error allocate buffer", return NULL);
 
-    req->opt = malloc(sizeof(list_t));
-    memset(req->opt, 0, sizeof(list_t));
-    req->header = malloc(sizeof(list_t));
-    memset(req->header, 0, sizeof(list_t));
+    req->opt = malloc(sizeof(req_list_t));
+    memset(req->opt, 0, sizeof(req_list_t));
+    req->header = malloc(sizeof(req_list_t));
+    memset(req->header, 0, sizeof(req_list_t));
 
     req->response = malloc(sizeof(response_t));
     REQ_CHECK(req->response == NULL, "Error create response", return NULL);
     memset(req->response, 0, sizeof(response_t));
 
-    req->response->header = malloc(sizeof(list_t));
+    req->response->header = malloc(sizeof(req_list_t));
     REQ_CHECK(req->response->header == NULL, "Error create response header", return NULL);
-    memset(req->response->header, 0, sizeof(list_t));
+    memset(req->response->header, 0, sizeof(req_list_t));
 
 
     req_setopt_from_uri(req, uri);
@@ -209,27 +210,27 @@ void req_setopt(request_t *req, REQ_OPTS opt, void* data)
         return;
     switch(opt) {
         case REQ_SET_METHOD:
-            list_set_key(req->opt, "method", data);
+            req_list_set_key(req->opt, "method", data);
             break;
         case REQ_SET_HEADER:
-            list_set_from_string(req->header, data);
+            req_list_set_from_string(req->header, data);
             break;
         case REQ_SET_HOST:
-            list_set_key(req->opt, "host", data);
-            list_set_key(req->header, "Host", data);
+            req_list_set_key(req->opt, "host", data);
+            req_list_set_key(req->header, "Host", data);
             break;
         case REQ_SET_PORT:
-            list_set_key(req->opt, "port", data);
+            req_list_set_key(req->opt, "port", data);
             break;
         case REQ_SET_PATH:
-            list_set_key(req->opt, "path", data);
+            req_list_set_key(req->opt, "path", data);
             break;
         case REQ_SET_URI:
             req_setopt_from_uri(req, data);
             break;
         case REQ_SET_SECURITY:
-            list_set_key(req->opt, "secure", data);
-            if(list_check_key(req->opt, "secure", "true")) {
+            req_list_set_key(req->opt, "secure", data);
+            if(req_list_check_key(req->opt, "secure", "true")) {
                 ESP_LOGI(REQ_TAG, "Secure");
                 req->_read = ssl_read;
                 req->_write = ssl_write;
@@ -244,13 +245,13 @@ void req_setopt(request_t *req, REQ_OPTS opt, void* data)
 
             break;
         case REQ_SET_POSTFIELDS:
-            list_set_key(req->header, "Content-Type", "application/x-www-form-urlencoded");
-            list_set_key(req->opt, "method", "POST");
+            req_list_set_key(req->header, "Content-Type", "application/x-www-form-urlencoded");
+            req_list_set_key(req->opt, "method", "POST");
         case REQ_SET_DATAFIELDS:
             post_len = strlen((char*)data);
             sprintf(len_str, "%d", post_len);
-            list_set_key(req->opt, "postfield", data);
-            list_set_key(req->header, "Content-Length", len_str);
+            req_list_set_key(req->opt, "postfield", data);
+            req_list_set_key(req->header, "Content-Length", len_str);
             break;
         case REQ_FUNC_UPLOAD_CB:
             req->upload_callback = data;
@@ -259,7 +260,7 @@ void req_setopt(request_t *req, REQ_OPTS opt, void* data)
             req->download_callback = data;
             break;
         case REQ_REDIRECT_FOLLOW:
-            list_set_key(req->opt, "follow", data);
+            req_list_set_key(req->opt, "follow", data);
             break;
         default:
             break;
@@ -268,14 +269,14 @@ void req_setopt(request_t *req, REQ_OPTS opt, void* data)
 static int req_process_upload(request_t *req)
 {
     int tx_write_len = 0;
-    list_t *found;
+    req_list_t *found;
 
 
-    found = list_get_key(req->opt, "method");
+    found = req_list_get_key(req->opt, "method");
     REQ_CHECK(found == NULL, "method required", return -1);
     tx_write_len += sprintf(req->buffer->data + tx_write_len, "%s ", (char*)found->value);
 
-    found = list_get_key(req->opt, "path");
+    found = req_list_get_key(req->opt, "path");
     REQ_CHECK(found == NULL, "path required", return -1);
     tx_write_len += sprintf(req->buffer->data + tx_write_len, "%s HTTP/1.1\r\n", (char*)found->value);
 
@@ -291,7 +292,7 @@ static int req_process_upload(request_t *req)
 
     REQ_CHECK(req->_write(req, req->buffer->data, tx_write_len) < 0, "Error write header", return -1);
 
-    found = list_get_key(req->opt, "postfield");
+    found = req_list_get_key(req->opt, "postfield");
     if(found) {
         ESP_LOGI(REQ_TAG, "Write data len=%d", strlen((char*)found->value));
         REQ_CHECK(req->_write(req, (char*)found->value, strlen((char*)found->value)) < 0, "Error write post field", return -1);
@@ -377,7 +378,7 @@ static int req_process_download(request_t *req)
     char *line;
     req->response->status_code = -1;
     reset_buffer(req);
-    list_clear(req->response->header);
+    req_list_clear(req->response->header);
     do {
         fill_buffer(req);
         if(process_header) {
@@ -397,7 +398,7 @@ static int req_process_download(request_t *req)
                             ESP_LOGI( REQ_TAG, "status code: %d", req->response->status_code );
                         }
                     } else {
-                        list_set_from_string(req->response->header, line);
+                        req_list_set_from_string(req->response->header, line);
                         ESP_LOGI( REQ_TAG, "header line: %s", line);
                     }
                 }
@@ -429,10 +430,10 @@ int req_perform(request_t *req)
         REQ_CHECK(req_process_upload(req) < 0, "Error send request", break);
         REQ_CHECK(req_process_download(req) < 0, "Error download", break);
 
-        if((req->response->status_code == 301 || req->response->status_code == 302) && list_check_key(req->opt, "follow", "true")) {
-            list_t *found = list_get_key(req->response->header, "Location");
+        if((req->response->status_code == 301 || req->response->status_code == 302) && req_list_check_key(req->opt, "follow", "true")) {
+            req_list_t *found = req_list_get_key(req->response->header, "Location");
             if(found) {
-                list_set_key(req->header, "Referer", (const char*)found->value);
+                req_list_set_key(req->header, "Referer", (const char*)found->value);
                 req_setopt_from_uri(req, (const char*)found->value);
                 ESP_LOGI(REQ_TAG, "Following: %s", (char*)found->value);
                 req->_close(req);
@@ -449,9 +450,9 @@ int req_perform(request_t *req)
 
 void req_clean(request_t *req)
 {
-    list_clear(req->opt);
-    list_clear(req->header);
-    list_clear(req->response->header);
+    req_list_clear(req->opt);
+    req_list_clear(req->header);
+    req_list_clear(req->response->header);
     free(req->opt);
     free(req->header);
     free(req->response->header);

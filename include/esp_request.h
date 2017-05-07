@@ -1,6 +1,6 @@
 #ifndef _ESP_REQUEST_H_
 #define _ESP_REQUEST_H_
-#include "list.h"
+#include "req_list.h"
 #include "uri_parser.h"
 #include "openssl/ssl.h"
 #include "lwip/sockets.h"
@@ -23,14 +23,10 @@ typedef enum {
     REQ_REDIRECT_FOLLOW
 } REQ_OPTS;
 
-typedef struct request_t;
 
-
-typedef int (*download_cb)(struct request_t *req, void *buffer, int len);
-typedef int (*upload_cb)(struct request_t *req, void *buffer, int len);
 
 typedef struct response_t {
-    list_t *header;
+    req_list_t *header;
     int status_code;
 } response_t;
 
@@ -42,8 +38,8 @@ typedef struct {
 } req_buffer_t;
 
 typedef struct request_t {
-    list_t *opt;
-    list_t *header;
+    req_list_t *opt;
+    req_list_t *header;
     SSL_CTX *ctx;
     SSL *ssl;
     req_buffer_t *buffer;
@@ -52,10 +48,13 @@ typedef struct request_t {
     int (*_read)(struct request_t *req, char *buffer, int len);
     int (*_write)(struct request_t *req, char *buffer, int len);
     int (*_close)(struct request_t *req);
-    upload_cb upload_callback;
-    download_cb download_callback;
+    int (*upload_callback)(struct request_t *req, void *buffer, int len);
+    int (*download_callback)(struct request_t *req, void *buffer, int len);
     response_t *response;
 } request_t;
+
+typedef int (*download_cb)(request_t *req, void *buffer, int len);
+typedef int (*upload_cb)(request_t *req, void *buffer, int len);
 
 
 request_t *req_new(const char *url);

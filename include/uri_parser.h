@@ -18,7 +18,7 @@ typedef struct {
 	int _uri_len;             	/* private */
 } parsed_uri_t;
 
-parsed_uri_t *parse_uri(char *);
+parsed_uri_t *parse_uri(const char *);
 void free_parsed_uri(parsed_uri_t *);
 void parse_uri_info(parsed_uri_t *puri);
 #ifdef __cplusplus
