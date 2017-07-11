@@ -75,7 +75,7 @@ static int nossl_connect(request_t *req)
     tv.tv_usec = 0;
     setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
-    ESP_LOGI(REQ_TAG, "[sock=%d],connecting to server IP:%s,Port:%s...",
+    ESP_LOGD(REQ_TAG, "[sock=%d],connecting to server IP:%s,Port:%s...",
              socket, ipaddr_ntoa((const ip_addr_t*)&remote_ip.sin_addr.s_addr), (char*)port->value);
     if(connect(socket, (struct sockaddr *)(&remote_ip), sizeof(struct sockaddr)) != 0) {
         close(socket);
@@ -231,7 +231,7 @@ void req_setopt(request_t *req, REQ_OPTS opt, void* data)
         case REQ_SET_SECURITY:
             req_list_set_key(req->opt, "secure", data);
             if(req_list_check_key(req->opt, "secure", "true")) {
-                ESP_LOGI(REQ_TAG, "Secure");
+                ESP_LOGD(REQ_TAG, "Secure");
                 req->_read = ssl_read;
                 req->_write = ssl_write;
                 req->_connect = ssl_connect;
@@ -288,13 +288,13 @@ static int req_process_upload(request_t *req)
     }
     tx_write_len += sprintf(req->buffer->data + tx_write_len, "\r\n");
 
-    ESP_LOGI(REQ_TAG, "Request = %s", req->buffer->data);
+    ESP_LOGD(REQ_TAG, "Request = %s", req->buffer->data);
 
     REQ_CHECK(req->_write(req, req->buffer->data, tx_write_len) < 0, "Error write header", return -1);
 
     found = req_list_get_key(req->opt, "postfield");
     if(found) {
-        ESP_LOGI(REQ_TAG, "Write data len=%d", strlen((char*)found->value));
+        ESP_LOGD(REQ_TAG, "Write data len=%d", strlen((char*)found->value));
         REQ_CHECK(req->_write(req, (char*)found->value, strlen((char*)found->value)) < 0, "Error write post field", return -1);
     }
 
@@ -327,7 +327,7 @@ static int fill_buffer(request_t *req)
         req->buffer->bytes_write = bytes_inside_buffer;
         if(req->buffer->bytes_write < 0)
             req->buffer->bytes_write = 0;
-        ESP_LOGI(REQ_TAG, "move=%d, write=%d, read=%d", bytes_inside_buffer, req->buffer->bytes_write, req->buffer->bytes_read);
+        ESP_LOGD(REQ_TAG, "move=%d, write=%d, read=%d", bytes_inside_buffer, req->buffer->bytes_write, req->buffer->bytes_read);
     }
     if(!req->buffer->at_eof)
     {
@@ -338,7 +338,7 @@ static int fill_buffer(request_t *req)
         }
         buffer_free_bytes = REQ_BUFFER_LEN - req->buffer->bytes_write;
         bread = req->_read(req, (void*)(req->buffer->data + req->buffer->bytes_write), buffer_free_bytes);
-        // ESP_LOGI(REQ_TAG, "bread = %d, bytes_write = %d, buffer_free_bytes = %d", bread, req->buffer->bytes_write, buffer_free_bytes);
+        // ESP_LOGD(REQ_TAG, "bread = %d, bytes_write = %d, buffer_free_bytes = %d", bread, req->buffer->bytes_write, buffer_free_bytes);
 
         if(bread < 0) {
             req->buffer->at_eof = 1;
@@ -384,7 +384,7 @@ static int req_process_download(request_t *req)
         if(process_header) {
             while((line = req_readline(req)) != NULL) {
                 if(line[0] == 0) {
-                    ESP_LOGI(REQ_TAG, "end process_idx=%d", req->buffer->bytes_read);
+                    ESP_LOGD(REQ_TAG, "end process_idx=%d", req->buffer->bytes_read);
                     header_off = req->buffer->bytes_read;
                     process_header = 0; //end of http header
                     break;
@@ -395,11 +395,11 @@ static int req_process_download(request_t *req)
                             char statusCode[4] = { 0 };
                             memcpy(statusCode, temp + 9, 3);
                             req->response->status_code = atoi(statusCode);
-                            ESP_LOGI( REQ_TAG, "status code: %d", req->response->status_code );
+                            ESP_LOGD( REQ_TAG, "status code: %d", req->response->status_code );
                         }
                     } else {
                         req_list_set_from_string(req->response->header, line);
-                        ESP_LOGI( REQ_TAG, "header line: %s", line);
+                        ESP_LOGD( REQ_TAG, "header line: %s", line);
                     }
                 }
             }
@@ -435,7 +435,7 @@ int req_perform(request_t *req)
             if(found) {
                 req_list_set_key(req->header, "Referer", (const char*)found->value);
                 req_setopt_from_uri(req, (const char*)found->value);
-                ESP_LOGI(REQ_TAG, "Following: %s", (char*)found->value);
+                ESP_LOGD(REQ_TAG, "Following: %s", (char*)found->value);
                 req->_close(req);
                 continue;
             }
