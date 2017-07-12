@@ -52,7 +52,7 @@ req_list_t *req_list_get_first(req_list_t *root)
         return NULL;
     if(root->next == NULL)
         return NULL;
-    // ESP_LOGI(LIST_TAG, "root->next = %x", (int)root->next);
+    // ESP_LOGD(LIST_TAG, "root->next = %x", (int)root->next);
     return root->next;
 }
 void req_list_remove(req_list_t *tree)
@@ -60,14 +60,14 @@ void req_list_remove(req_list_t *tree)
 	req_list_t *found = tree;
 	if (found != NULL) {
 		if (found->next && found->prev) {
-            // ESP_LOGI(LIST_TAG, "found->prev->next= %x, found->next->prev=%x", (int)found->prev->next, (int)found->next->prev);
+            // ESP_LOGD(LIST_TAG, "found->prev->next= %x, found->next->prev=%x", (int)found->prev->next, (int)found->next->prev);
 			found->prev->next = found->next;
 			found->next->prev = found->prev;
 		} else if (found->next) {
-            // ESP_LOGI(LIST_TAG, "found->next->prev= %x", (int)found->next->prev);
+            // ESP_LOGD(LIST_TAG, "found->next->prev= %x", (int)found->next->prev);
 			found->next->prev = NULL;
 		} else if (found->prev) {
-            // ESP_LOGI(LIST_TAG, "found->prev->next =%x", (int)found->prev->next);
+            // ESP_LOGD(LIST_TAG, "found->prev->next =%x", (int)found->prev->next);
 			found->prev->next = NULL;
 		}
         free(found->key);
@@ -81,7 +81,7 @@ void req_list_clear(req_list_t *root)
     //FIXME: Need to test this function
     req_list_t *found;
     while((found = req_list_get_first(root)) != NULL) {
-        // ESP_LOGI(LIST_TAG, "free key=%s, value=%s, found=%x", (char*)found->key, (char*)found->value, (int)found);
+        // ESP_LOGD(LIST_TAG, "free key=%s, value=%s, found=%x", (char*)found->key, (char*)found->value, (int)found);
         req_list_remove(found);
     }
 }
