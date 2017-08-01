@@ -30,20 +30,7 @@ _is_scheme_char(int c)
 {
     return (!isalpha(c) && '+' != c && '-' != c && '.' != c) ? 0 : 1;
 }
-char *str_end_with(char *str, char *end, int max_char)
-{
-    int str_check_len = strlen(str);
-    char *check_str, *found;
-    if(str == NULL)
-        return NULL;
-    if(str_check_len > max_char) {
-        check_str = &str[str_check_len - max_char];
-        found = strstr(check_str, end);
-        if(found)
-            return (char*)(found + 1);
-    }
-    return NULL;
-}
+
 #define JUMP_NEXT_STATE(var, state) { *curr_ptr = 0; curr_ptr ++; var = curr_ptr; parse_state = state; break;}
 parsed_uri_t *parse_uri(const char *url)
 {

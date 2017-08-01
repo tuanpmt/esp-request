@@ -206,6 +206,8 @@ void req_setopt(request_t *req, REQ_OPTS opt, void* data)
 {
     int post_len;
     char len_str[10] = {0};
+    req_list_t *tmp;
+    char *host_w_port = malloc(1024);
     if(!req || !data)
         return;
     switch(opt) {
@@ -217,10 +219,22 @@ void req_setopt(request_t *req, REQ_OPTS opt, void* data)
             break;
         case REQ_SET_HOST:
             req_list_set_key(req->opt, "host", data);
-            req_list_set_key(req->header, "Host", data);
+            tmp = req_list_get_key(req->opt, "port");
+            if(tmp != NULL) {
+                sprintf(host_w_port, "%s:%s", (char*)data, (char*)tmp->value);
+            } else {
+                sprintf(host_w_port, "%s", (char*)data);
+            }
+            req_list_set_key(req->header, "Host", host_w_port);
             break;
         case REQ_SET_PORT:
             req_list_set_key(req->opt, "port", data);
+            tmp = req_list_get_key(req->opt, "host");
+            if(tmp != NULL) {
+                sprintf(host_w_port, "%s:%s", (char*)tmp->value, (char*)data);
+                req_list_set_key(req->header, "Host", host_w_port);
+            }
+
             break;
         case REQ_SET_PATH:
             req_list_set_key(req->opt, "path", data);
@@ -265,6 +279,7 @@ void req_setopt(request_t *req, REQ_OPTS opt, void* data)
         default:
             break;
     }
+    free(host_w_port);
 }
 static int req_process_upload(request_t *req)
 {
@@ -288,14 +303,19 @@ static int req_process_upload(request_t *req)
     }
     tx_write_len += sprintf(req->buffer->data + tx_write_len, "\r\n");
 
-    ESP_LOGD(REQ_TAG, "Request = %s", req->buffer->data);
+    // ESP_LOGD(REQ_TAG, "Request header, len= %d, real_len= %d\r\n%s", tx_write_len, strlen(req->buffer->data), req->buffer->data);
 
     REQ_CHECK(req->_write(req, req->buffer->data, tx_write_len) < 0, "Error write header", return -1);
 
     found = req_list_get_key(req->opt, "postfield");
     if(found) {
-        ESP_LOGD(REQ_TAG, "Write data len=%d", strlen((char*)found->value));
-        REQ_CHECK(req->_write(req, (char*)found->value, strlen((char*)found->value)) < 0, "Error write post field", return -1);
+        ESP_LOGD(REQ_TAG, "Begin write %d bytes", strlen((char*)found->value));
+        int bwrite = req->_write(req, (char*)found->value, strlen((char*)found->value));
+        ESP_LOGD(REQ_TAG, "end write %d bytes", bwrite);
+        if(bwrite < 0) {
+            ESP_LOGE(REQ_TAG, "Error write");
+            return -1;
+        }
     }
 
     if(req->upload_callback) {
@@ -311,6 +331,7 @@ static int reset_buffer(request_t *req)
     req->buffer->bytes_read = 0;
     req->buffer->bytes_write = 0;
     req->buffer->at_eof = 0;
+    req->buffer->bytes_total = 0;
     return 0;
 }
 
@@ -337,9 +358,10 @@ static int fill_buffer(request_t *req)
             req->buffer->bytes_read = 0;
         }
         buffer_free_bytes = REQ_BUFFER_LEN - req->buffer->bytes_write;
+        ESP_LOGD(REQ_TAG, "Begin read %d bytes", buffer_free_bytes);
         bread = req->_read(req, (void*)(req->buffer->data + req->buffer->bytes_write), buffer_free_bytes);
         // ESP_LOGD(REQ_TAG, "bread = %d, bytes_write = %d, buffer_free_bytes = %d", bread, req->buffer->bytes_write, buffer_free_bytes);
-
+        ESP_LOGD(REQ_TAG, "End read, byte read= %d bytes", bread);
         if(bread < 0) {
             req->buffer->at_eof = 1;
             return -1;
@@ -376,9 +398,11 @@ static int req_process_download(request_t *req)
 {
     int process_header = 1, header_off = 0;
     char *line;
+    req_list_t *content_len;
     req->response->status_code = -1;
     reset_buffer(req);
     req_list_clear(req->response->header);
+    req->response->len = 0;
     do {
         fill_buffer(req);
         if(process_header) {
@@ -395,11 +419,11 @@ static int req_process_download(request_t *req)
                             char statusCode[4] = { 0 };
                             memcpy(statusCode, temp + 9, 3);
                             req->response->status_code = atoi(statusCode);
-                            ESP_LOGD( REQ_TAG, "status code: %d", req->response->status_code );
+                            ESP_LOGD(REQ_TAG, "status code: %d", req->response->status_code);
                         }
                     } else {
                         req_list_set_from_string(req->response->header, line);
-                        ESP_LOGD( REQ_TAG, "header line: %s", line);
+                        ESP_LOGD(REQ_TAG, "header line: %s", line);
                     }
                 }
             }
@@ -412,11 +436,23 @@ static int req_process_download(request_t *req)
             }
 
             req->buffer->bytes_read = req->buffer->bytes_write;
-
-            if(req->download_callback && ( req->buffer->bytes_write - header_off ) != 0) {
+            content_len = req_list_get_key(req->response->header, "Content-Length");
+            if(content_len) {
+                req->response->len = atoi(content_len->value);
+            }
+            if(req->response->len && req->download_callback && (req->buffer->bytes_write - header_off) != 0) {
                 if(req->download_callback(req, (void *)(req->buffer->data + header_off), req->buffer->bytes_write - header_off) < 0) break;
+
+                req->buffer->bytes_total += req->buffer->bytes_write - header_off;
+                if(req->buffer->bytes_total == req->response->len) {
+                    break;
+                }
             }
             header_off = 0;
+            if(req->response->len == 0) {
+                break;
+            }
+
         }
 
     } while(req->buffer->at_eof == 0);

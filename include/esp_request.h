@@ -28,11 +28,13 @@ typedef enum {
 typedef struct response_t {
     req_list_t *header;
     int status_code;
+    int len;
 } response_t;
 
 typedef struct {
     int bytes_read;
     int bytes_write;
+    int bytes_total;
     char *data;
     int at_eof;
 } req_buffer_t;
@@ -43,6 +45,7 @@ typedef struct request_t {
     SSL_CTX *ctx;
     SSL *ssl;
     req_buffer_t *buffer;
+    void *context;
     int socket;
     int (*_connect)(struct request_t *req);
     int (*_read)(struct request_t *req, char *buffer, int len);
