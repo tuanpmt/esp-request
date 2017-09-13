@@ -2,6 +2,8 @@
 * @2017
 * Tuan PM <tuanpm at live dot com>
 */
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -15,6 +17,9 @@
 #include "lwip/netdb.h"
 #include "lwip/igmp.h"
 #include "req_list.h"
+
+#include "mbedtls/base64.h"
+#include "mbedtls/sha1.h"
 
 #define REQ_TAG "HTTP_REQ"
 
@@ -96,6 +101,75 @@ static int ssl_connect(request_t *req)
     SSL_connect(req->ssl);
     return 0;
 }
+static char *ws_esc(char *buffer, int len, int *outlen)
+{
+    int header_len = 0;
+    char *data_buffer = malloc(len + MAX_WEBSOCKET_HEADER_SIZE), *mask;
+    // Opcode; final fragment
+    data_buffer[header_len++] = WS_OPCODE_BINARY | WS_FIN;
+
+    // NOTE: no support for > 16-bit sized messages
+    if(len > 125) {
+        data_buffer[header_len++] = WS_SIZE16 | WS_MASK;
+        data_buffer[header_len++] = (uint8_t)(len >> 8);
+        data_buffer[header_len++] = (uint8_t)(len & 0xFF);
+    } else {
+        data_buffer[header_len++] = (uint8_t)(len | WS_MASK);
+    }
+    mask = &data_buffer[header_len];
+    data_buffer[header_len++] = rand() & 0xFF;
+    data_buffer[header_len++] = rand() & 0xFF;
+    data_buffer[header_len++] = rand() & 0xFF;
+    data_buffer[header_len++] = rand() & 0xFF;
+
+    for(int i = 0; i < len; ++i) {
+        data_buffer[header_len++] = (buffer[i] ^ mask[i % 4]);
+    }
+    *outlen = header_len;
+    return data_buffer;
+}
+static int ws_unesc(unsigned char *ws_buffer, unsigned char *buffer, int len)
+{
+    int payloadLen;
+    unsigned char *data_ptr = ws_buffer, opcode, mask, *maskKey = NULL;
+    if(len <= 0)
+    {
+        return -1;
+    }
+    opcode = (*data_ptr & 0x0F);
+    data_ptr ++;
+    mask = ((*data_ptr >> 7) & 0x01);
+    payloadLen = (*data_ptr & 0x7F);
+    data_ptr++;
+    ESP_LOGD(REQ_TAG, "Opcode: %d, mask: %d, len: %d\r\n", opcode, mask, payloadLen);
+    if(payloadLen == 126) {
+        // headerLen += 2;
+        payloadLen = data_ptr[0] << 8 | data_ptr[1];
+        data_ptr += 2;
+    } else if(payloadLen == 127) {
+        // headerLen += 8;
+
+        if(data_ptr[0] != 0 || data_ptr[1] != 0 || data_ptr[2] != 0 || data_ptr[3] != 0) {
+            // really too big!
+            payloadLen = 0xFFFFFFFF;
+        } else {
+            payloadLen = data_ptr[4] << 24 | data_ptr[5] << 16 | data_ptr[6] << 8 | data_ptr[7];
+        }
+        data_ptr += 8;
+    }
+
+    if(mask) {
+        maskKey = data_ptr;
+        data_ptr += 4;
+        for(int i = 0; i < payloadLen; i++) {
+            buffer[i] = (data_ptr[i] ^ maskKey[i % 4]);
+        }
+    } else {
+        memcpy(buffer, data_ptr, payloadLen);
+    }
+    return payloadLen;
+}
+
 static int ssl_write(request_t *req, char *buffer, int len)
 {
     return SSL_write(req->ssl, buffer, len);
@@ -103,6 +177,13 @@ static int ssl_write(request_t *req, char *buffer, int len)
 
 static int nossl_write(request_t *req, char *buffer, int len)
 {
+    if(req->valid_websocket) {
+        int ws_len = 0;
+        char *ws_buffer = ws_esc(buffer, len, &ws_len);
+        write(req->socket, ws_buffer, ws_len);
+        free(ws_buffer);
+        return len;
+    }
     return write(req->socket, buffer, len);
 }
 
@@ -113,7 +194,16 @@ static int ssl_read(request_t *req, char *buffer, int len)
 
 static int nossl_read(request_t *req, char *buffer, int len)
 {
-    return read(req->socket, buffer, len);
+    int ret = -1;
+    if(req->valid_websocket) {
+        unsigned char *ws_buffer = (unsigned char*) malloc(len + MAX_WEBSOCKET_HEADER_SIZE);
+        ret = read(req->socket, ws_buffer, len + MAX_WEBSOCKET_HEADER_SIZE);
+        ret = ws_unesc(ws_buffer, (unsigned char *)buffer, ret);
+        free(ws_buffer);
+    } else {
+        ret = read(req->socket, buffer, len);
+    }
+    return ret;
 }
 static int ssl_close(request_t *req)
 {
@@ -136,8 +226,18 @@ static int req_setopt_from_uri(request_t *req, const char* uri)
     puri = parse_uri(uri);
     REQ_CHECK(puri == NULL, "Error parse uri", return -1);
 
+    req->is_websocket = 0;
+
     if(strcasecmp(puri->scheme, "https") == 0) {
         req_setopt(req, REQ_SET_SECURITY, "true");
+    } else if(strcasecmp(puri->scheme, "ws") == 0) {
+        req_setopt(req, REQ_SET_SECURITY, "false");
+        req->is_websocket = 1;
+        strcpy(port, "80");
+        port[2] = 0;
+    } else if(strcasecmp(puri->scheme, "wss") == 0) {
+        req_setopt(req, REQ_SET_SECURITY, "true");
+        req->is_websocket = 1;
     } else {
         req_setopt(req, REQ_SET_SECURITY, "false");
         strcpy(port, "80");
@@ -166,6 +266,7 @@ static int req_setopt_from_uri(request_t *req, const char* uri)
 }
 request_t *req_new(const char *uri)
 {
+    unsigned char random_key[16] = { 0 }, b64_key[32] = {0};
     request_t *req = malloc(sizeof(request_t));
 
     REQ_CHECK(req == NULL, "Error allocate req", return NULL);
@@ -195,6 +296,20 @@ request_t *req_new(const char *uri)
 
     req_setopt_from_uri(req, uri);
 
+    req->valid_websocket = 0;
+    if(req->is_websocket) {
+        int i;
+        for(i = 0; i < sizeof(random_key); i++) {
+            random_key[i] = rand() & 0xFF;
+        }
+        size_t outlen = 0;
+        mbedtls_base64_encode(b64_key, 32,  &outlen, random_key, 16);
+
+        req_setopt(req, REQ_SET_HEADER, "Connection: Upgrade");
+        req_setopt(req, REQ_SET_HEADER, "Upgrade: websocket");
+        req_setopt(req, REQ_SET_HEADER, "Sec-WebSocket-Version: 13");
+        req_list_set_key(req->header, "Sec-WebSocket-Key", (char *)b64_key);
+    }
     req_setopt(req, REQ_REDIRECT_FOLLOW, "true");
     req_setopt(req, REQ_SET_METHOD, "GET");
     req_setopt(req, REQ_SET_HEADER, "User-Agent: ESP32 Http Client");
@@ -273,6 +388,9 @@ void req_setopt(request_t *req, REQ_OPTS opt, void* data)
         case REQ_FUNC_DOWNLOAD_CB:
             req->download_callback = data;
             break;
+        case REQ_FUNC_WEBSOCKET:
+            req->websocket_callback = data;
+            break;
         case REQ_REDIRECT_FOLLOW:
             req_list_set_key(req->opt, "follow", data);
             break;
@@ -303,7 +421,7 @@ static int req_process_upload(request_t *req)
     }
     tx_write_len += sprintf(req->buffer->data + tx_write_len, "\r\n");
 
-    // ESP_LOGD(REQ_TAG, "Request header, len= %d, real_len= %d\r\n%s", tx_write_len, strlen(req->buffer->data), req->buffer->data);
+    ESP_LOGD(REQ_TAG, "Request header, len= %d, real_len= %d\r\n%s", tx_write_len, strlen(req->buffer->data), req->buffer->data);
 
     REQ_CHECK(req->_write(req, req->buffer->data, tx_write_len) < 0, "Error write header", return -1);
 
@@ -411,6 +529,25 @@ static int req_process_download(request_t *req)
                     ESP_LOGD(REQ_TAG, "end process_idx=%d", req->buffer->bytes_read);
                     header_off = req->buffer->bytes_read;
                     process_header = 0; //end of http header
+                    req_list_t *server_key = req_list_get_key(req->response->header, "Sec-WebSocket-Accept");
+                    req_list_t *client_key = req_list_get_key(req->header, "Sec-WebSocket-Key");
+                    if(server_key && client_key) {
+                        unsigned char client_key_b64[64], valid_client_key[20], accept_key[32] = {0};
+                        int key_len = sprintf((char*)client_key_b64, "%s258EAFA5-E914-47DA-95CA-C5AB0DC85B11", (char*)client_key->value);
+                        mbedtls_sha1(client_key_b64, (size_t)key_len, valid_client_key);
+                        size_t outlen = 0;
+                        mbedtls_base64_encode(accept_key, 32,  &outlen, valid_client_key, 20);
+                        accept_key[outlen] = 0;
+
+                        if(strcmp((char*)accept_key, (char*)server_key->value) == 0) {
+                            req->valid_websocket = 1;
+
+                            if(req->websocket_callback) {
+                                req->websocket_callback(req, WS_CONNECTED, NULL, 0);
+                            }
+                        }
+                        ESP_LOGD(REQ_TAG, "server key=%s, send_key=%s, accept_key=%s, valid=%d", (char *)server_key->value, (char*)client_key->value, accept_key, req->valid_websocket);
+                    }
                     break;
                 } else {
                     if(req->response->status_code < 0) {
@@ -459,13 +596,39 @@ static int req_process_download(request_t *req)
     return 0;
 }
 
+void req_websocket_task(void *pv)
+{
+    request_t *req = pv;
+    while(req->valid_websocket) {
+        int len = req->_read(req, (char *)req->buffer, REQ_BUFFER_LEN);
+        if(len < 0) {
+            req->valid_websocket = 0;
+            break;
+        }
+        if(len > 0) {
+            if(req->websocket_callback) {
+                req->websocket_callback(req, WS_DATA, req->buffer, len);
+            }
+
+        }
+
+    }
+    req->_close(req);
+    if(req->websocket_callback) {
+        req->websocket_callback(req, WS_DISCONNECTED, NULL, 0);
+    }
+    vTaskDelete(NULL);
+}
+
 int req_perform(request_t *req)
 {
     do {
         REQ_CHECK(req->_connect(req) < 0, "Error connnect", break);
         REQ_CHECK(req_process_upload(req) < 0, "Error send request", break);
         REQ_CHECK(req_process_download(req) < 0, "Error download", break);
-
+        if(req->valid_websocket) {
+            xTaskCreate(req_websocket_task, "req_websocket_task", 2*1024, req, 5, NULL);
+        }
         if((req->response->status_code == 301 || req->response->status_code == 302) && req_list_check_key(req->opt, "follow", "true")) {
             req_list_t *found = req_list_get_key(req->response->header, "Location");
             if(found) {
@@ -480,12 +643,24 @@ int req_perform(request_t *req)
             break;
         }
     } while(1);
-    req->_close(req);
+    if(req->valid_websocket == 0) {
+        req->_close(req);
+    }
     return req->response->status_code;
 }
-
+void req_close(request_t *req)
+{
+    req->valid_websocket = 0;
+}
+int req_write(request_t *req, const char *buffer, int len)
+{
+    return req->_write(req, (char *)buffer, len);
+}
 void req_clean(request_t *req)
 {
+    if(req->valid_websocket) {
+        req->_close(req);
+    }
     req_list_clear(req->opt);
     req_list_clear(req->header);
     req_list_clear(req->response->header);

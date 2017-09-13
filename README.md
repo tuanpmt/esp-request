@@ -37,6 +37,39 @@ static void request_task(void *pvParameters)
 
 ```
 
+## Websocket
+
+```
+
+int websocket_cb(request_t *req, int status, void *buffer, int len)
+{
+    switch(status) {
+        case WS_CONNECTED:
+            ESP_LOGI(MAIN_TAG, "websocket connected");
+            req_write(req, "hello world", 11);
+            break;
+        case WS_DATA:
+            ((char*)buffer)[len] = 0;
+            ESP_LOGI(MAIN_TAG, "websocket data = %s", (char*)buffer);
+            req_close(req);
+            break;
+        case WS_DISCONNECTED:
+            ESP_LOGI(MAIN_TAG, "websocket disconnected");
+            req_clean(req);
+            req = NULL;
+            break;
+    }
+    return 0;
+}
+void app()
+{
+    request_t *req = req_new("ws://echo.websocket.org");
+    req_setopt(req, REQ_FUNC_WEBSOCKET, websocket_cb);
+    req_perform(req);
+}
+
+```
+
 ## Usage 
 - Create ESP-IDF application https://github.com/espressif/esp-idf-template
 - Clone `git submodule add https://github.com/tuanpmt/esp-request components/esp-request`
@@ -72,6 +105,7 @@ static void request_task(void *pvParameters)
 - [x] Follow redirect
 - [x] Support SSL
 - [x] Support Set POST Fields (simple)
+- [x] Support Websocket
 - [ ] Support Basic Auth
 - [ ] Support Upload multipart
 - [ ] Support Cookie

@@ -7,6 +7,19 @@
 #include "lwip/netdb.h"
 
 #define REQ_BUFFER_LEN  (2048)
+
+#define WS_FIN            0x80
+#define WS_OPCODE_TEXT    0x01
+#define WS_OPCODE_BINARY  0x02
+#define WS_OPCODE_CLOSE   0x08
+#define WS_OPCODE_PING    0x09
+#define WS_OPCODE_PONG    0x0a
+// Second byte
+#define WS_MASK           0x80
+#define WS_SIZE16         126
+#define WS_SIZE64         127
+#define MAX_WEBSOCKET_HEADER_SIZE 10
+
 typedef enum {
     REQ_SET_METHOD = 0x01,
     REQ_SET_HEADER,
@@ -20,10 +33,15 @@ typedef enum {
     REQ_SET_UPLOAD_LEN,
     REQ_FUNC_DOWNLOAD_CB,
     REQ_FUNC_UPLOAD_CB,
-    REQ_REDIRECT_FOLLOW
+    REQ_REDIRECT_FOLLOW,
+    REQ_FUNC_WEBSOCKET
 } REQ_OPTS;
 
-
+typedef enum {
+    WS_CONNECTED = 0x01,
+    WS_DATA,
+    WS_DISCONNECTED
+} REQ_WS_STATUS;
 
 typedef struct response_t {
     req_list_t *header;
@@ -53,16 +71,21 @@ typedef struct request_t {
     int (*_close)(struct request_t *req);
     int (*upload_callback)(struct request_t *req, void *buffer, int len);
     int (*download_callback)(struct request_t *req, void *buffer, int len);
+    int (*websocket_callback)(struct request_t *req, int status, void *buffer, int len);
     response_t *response;
+    int is_websocket;
+    int valid_websocket;
 } request_t;
 
 typedef int (*download_cb)(request_t *req, void *buffer, int len);
 typedef int (*upload_cb)(request_t *req, void *buffer, int len);
-
+// typedef int (*websocket_cb)(request_t *req, int status, void *buffer, int len);
 
 request_t *req_new(const char *url);
 void req_setopt(request_t *req, REQ_OPTS opt, void* data);
 void req_clean(request_t *req);
+void req_close(request_t *req);
+int req_write(request_t *req, const char *buffer, int len);
 int req_perform(request_t *req);
 
 #endif
