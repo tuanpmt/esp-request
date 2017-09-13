@@ -617,14 +617,14 @@ void req_websocket_task(void *pv)
 {
     request_t *req = pv;
     while(req->valid_websocket) {
-        int len = req->_read(req, (char *)req->buffer, REQ_BUFFER_LEN);
+        int len = req->_read(req, (char *)req->buffer->data, REQ_BUFFER_LEN);
         if(len < 0) {
             req->valid_websocket = 0;
             break;
         }
         if(len > 0) {
             if(req->websocket_callback) {
-                req->websocket_callback(req, WS_DATA, req->buffer, len);
+                req->websocket_callback(req, WS_DATA, req->buffer->data, len);
             }
 
         }
