@@ -39,22 +39,22 @@ static void request_task(void *pvParameters)
 
 ## Websocket
 
-```
+```cpp
 
 int websocket_cb(request_t *req, int status, void *buffer, int len)
 {
     switch(status) {
         case WS_CONNECTED:
-            ESP_LOGI(MAIN_TAG, "websocket connected");
+            ESP_LOGI(TAG, "websocket connected");
             req_write(req, "hello world", 11);
             break;
         case WS_DATA:
             ((char*)buffer)[len] = 0;
-            ESP_LOGI(MAIN_TAG, "websocket data = %s", (char*)buffer);
+            ESP_LOGI(TAG, "websocket data = %s", (char*)buffer);
             req_close(req);
             break;
         case WS_DISCONNECTED:
-            ESP_LOGI(MAIN_TAG, "websocket disconnected");
+            ESP_LOGI(TAG, "websocket disconnected");
             req_clean(req);
             req = NULL;
             break;
@@ -63,7 +63,7 @@ int websocket_cb(request_t *req, int status, void *buffer, int len)
 }
 void app()
 {
-    request_t *req = req_new("ws://echo.websocket.org");
+    request_t *req = req_new("ws://echo.websocket.org"); // or wss://echo.websocket.org
     req_setopt(req, REQ_FUNC_WEBSOCKET, websocket_cb);
     req_perform(req);
 }
@@ -95,6 +95,7 @@ void app()
 - REQ_SET_UPLOAD_LEN - Not effect for now
 - REQ_FUNC_DOWNLOAD_CB - `req_setopt(req, REQ_FUNC_DOWNLOAD_CB, download_callback);`
 - REQ_FUNC_UPLOAD_CB
+- REQ_FUNC_WEBSOCKET
 - REQ_REDIRECT_FOLLOW - `req_setopt(req, REQ_REDIRECT_FOLLOW, "true"); //or "false"`
 
 ### URI format 
@@ -105,13 +106,12 @@ void app()
 - [x] Follow redirect
 - [x] Support SSL
 - [x] Support Set POST Fields (simple)
-- [x] Support Websocket
+- [x] Support Websocket & Websocket Secure
 - [ ] Support Basic Auth
 - [ ] Support Upload multipart
 - [ ] Support Cookie
 
 ## Known Issues 
-- ~~Memory leak~~
 - Uri parse need more work
 
 ## Authors

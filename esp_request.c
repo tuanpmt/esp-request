@@ -172,6 +172,13 @@ static int ws_unesc(unsigned char *ws_buffer, unsigned char *buffer, int len)
 
 static int ssl_write(request_t *req, char *buffer, int len)
 {
+    if(req->valid_websocket) {
+        int ws_len = 0;
+        char *ws_buffer = ws_esc(buffer, len, &ws_len);
+        SSL_write(req->ssl, ws_buffer, ws_len);
+        free(ws_buffer);
+        return len;
+    }
     return SSL_write(req->ssl, buffer, len);
 }
 
@@ -189,7 +196,17 @@ static int nossl_write(request_t *req, char *buffer, int len)
 
 static int ssl_read(request_t *req, char *buffer, int len)
 {
-    return SSL_read(req->ssl, buffer, len);
+    int ret = -1;
+    if(req->valid_websocket) {
+        unsigned char *ws_buffer = (unsigned char*) malloc(len + MAX_WEBSOCKET_HEADER_SIZE);
+        ret = SSL_read(req->ssl, ws_buffer, len + MAX_WEBSOCKET_HEADER_SIZE);
+        ret = ws_unesc(ws_buffer, (unsigned char *)buffer, ret);
+        free(ws_buffer);
+    } else {
+        ret = SSL_read(req->ssl, buffer, len);
+    }
+
+    return ret;
 }
 
 static int nossl_read(request_t *req, char *buffer, int len)
