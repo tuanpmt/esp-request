@@ -19,6 +19,7 @@
 #define WS_SIZE16         126
 #define WS_SIZE64         127
 #define MAX_WEBSOCKET_HEADER_SIZE 10
+#define WS_RESPONSE_OK    101
 
 typedef enum {
     REQ_SET_METHOD = 0x01,
@@ -40,7 +41,8 @@ typedef enum {
 typedef enum {
     WS_CONNECTED = 0x01,
     WS_DATA,
-    WS_DISCONNECTED
+    WS_DISCONNECTED,
+    WS_ERROR
 } REQ_WS_STATUS;
 
 typedef struct response_t {
