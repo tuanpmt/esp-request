@@ -317,7 +317,7 @@ request_t *req_new(const char *uri)
     REQ_CHECK(req->response->header == NULL, "Error create response header", return NULL);
     memset(req->response->header, 0, sizeof(req_list_t));
 
-    req->protocol = PROTOCOL_HTTP;
+    req_setopt(req, REQ_SET_PROTOCOL, (void*)PROTOCOL_HTTP);
     req->socket = -1;
 
     req_setopt_from_uri(req, uri);
@@ -382,6 +382,7 @@ void req_setopt(request_t *req, REQ_OPTS opt, void* data)
             break;
         case REQ_SET_URI:
             req_setopt_from_uri(req, data);
+            break;
         case REQ_SET_PROTOCOL:
             req->protocol = (REQ_PROTOCOL)data;
 

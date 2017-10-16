@@ -40,9 +40,9 @@ typedef enum {
 } REQ_OPTS;
 
 typedef enum {
-    PROTOCOL_HTTP = 0,
-    PROTOCOL_WEBSOCKET = 1,
-    PROTOCOL_SIP = 2
+    PROTOCOL_HTTP = 1,
+    PROTOCOL_WEBSOCKET,
+    PROTOCOL_SIP
 } REQ_PROTOCOL;
 
 typedef enum {
