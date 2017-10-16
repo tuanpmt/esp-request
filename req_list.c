@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdio.h>
+#include <stdarg.h>
 #include "req_list.h"
 #include "esp_log.h"
 #define LIST_TAG "LIST"
@@ -156,6 +158,21 @@ req_list_t *req_list_set_from_string(req_list_t *root, const char *data)
     ret = req_list_set_key(root, trimwhitespace(key), trimwhitespace(value));
     free(key);
     free(value);
+    return ret;
+}
+req_list_t *req_list_set_format(req_list_t *root, const char *key, const char *format, ...)
+{
+    req_list_t *ret = NULL;
+    va_list argptr;
+    char *buf = calloc(1, 1024);
+    if(buf == NULL) {
+        return NULL;
+    }
+    va_start(argptr, format);
+    vsnprintf(buf, 1024, format, argptr);
+    va_end(argptr);
+    ret = req_list_set_key(root, key, buf);
+    free(buf);
     return ret;
 }
 req_list_t *req_list_clear_key(req_list_t *root, const char *key)

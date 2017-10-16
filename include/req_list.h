@@ -17,4 +17,5 @@ req_list_t *req_list_set_key(req_list_t *root, const char *key, const char *valu
 req_list_t *req_list_get_key(req_list_t *root, const char *key);
 int req_list_check_key(req_list_t *root, const char *key, const char *value);
 req_list_t *req_list_set_from_string(req_list_t *root, const char *data); //data = "key=value"
+req_list_t *req_list_set_format(req_list_t *root, const char *key, const char *format, ...);
 #endif

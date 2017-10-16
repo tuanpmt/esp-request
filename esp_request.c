@@ -84,6 +84,7 @@ static int nossl_connect(request_t *req)
              socket, ipaddr_ntoa((const ip_addr_t*)&remote_ip.sin_addr.s_addr), (char*)port->value);
     if(connect(socket, (struct sockaddr *)(&remote_ip), sizeof(struct sockaddr)) != 0) {
         close(socket);
+        req->socket = -1;
         return -1;
     }
     req->socket = socket;
@@ -141,7 +142,7 @@ static int ws_unesc(unsigned char *ws_buffer, unsigned char *buffer, int len)
     mask = ((*data_ptr >> 7) & 0x01);
     payloadLen = (*data_ptr & 0x7F);
     data_ptr++;
-    ESP_LOGD(REQ_TAG, "Opcode: %d, mask: %d, len: %d\r\n", opcode, mask, payloadLen);
+    ESP_LOGI(REQ_TAG, "Opcode: %d, mask: %d, len: %d\r\n", opcode, mask, payloadLen);
     if(payloadLen == 126) {
         // headerLen += 2;
         payloadLen = data_ptr[0] << 8 | data_ptr[1];
@@ -269,6 +270,12 @@ static int req_setopt_from_uri(request_t *req, const char* uri)
         }
 
     }
+    if(puri->username) {
+        req_list_set_key(req->opt, "username", puri->username);
+    }
+    if(puri->password) {
+        req_list_set_key(req->opt, "password", puri->password);
+    }
 
     req_setopt(req, REQ_SET_HOST, puri->host);
     req_setopt(req, REQ_SET_PATH, puri->path);
@@ -310,6 +317,8 @@ request_t *req_new(const char *uri)
     REQ_CHECK(req->response->header == NULL, "Error create response header", return NULL);
     memset(req->response->header, 0, sizeof(req_list_t));
 
+    req->protocol = PROTOCOL_HTTP;
+    req->socket = -1;
 
     req_setopt_from_uri(req, uri);
 
@@ -373,6 +382,17 @@ void req_setopt(request_t *req, REQ_OPTS opt, void* data)
             break;
         case REQ_SET_URI:
             req_setopt_from_uri(req, data);
+        case REQ_SET_PROTOCOL:
+            req->protocol = (REQ_PROTOCOL)data;
+
+            if(req->protocol == PROTOCOL_HTTP) {
+                req_list_set_key(req->opt, "protocol", "HTTP/1.1");
+            } else if(req->protocol == PROTOCOL_SIP) {
+                req_list_set_key(req->opt, "protocol", "SIP/2.0");
+            } else {
+                req_list_set_key(req->opt, "protocol", "Unknown");
+            }
+
             break;
         case REQ_SET_SECURITY:
             req_list_set_key(req->opt, "secure", data);
@@ -419,7 +439,7 @@ void req_setopt(request_t *req, REQ_OPTS opt, void* data)
 static int req_process_upload(request_t *req)
 {
     int tx_write_len = 0;
-    req_list_t *found;
+    req_list_t *found, *protocol;
 
 
     found = req_list_get_key(req->opt, "method");
@@ -428,7 +448,11 @@ static int req_process_upload(request_t *req)
 
     found = req_list_get_key(req->opt, "path");
     REQ_CHECK(found == NULL, "path required", return -1);
-    tx_write_len += sprintf(req->buffer->data + tx_write_len, "%s HTTP/1.1\r\n", (char*)found->value);
+
+    protocol = req_list_get_key(req->opt, "protocol");
+    REQ_CHECK(protocol == NULL, "protocol required", return -1);
+
+    tx_write_len += sprintf(req->buffer->data + tx_write_len, "%s %s\r\n", (char*)found->value, (char*)protocol->value);
 
     //TODO: Check header len < REQ_BUFFER_LEN
     found = req->header;
@@ -568,10 +592,18 @@ static int req_process_download(request_t *req)
                     break;
                 } else {
                     if(req->response->status_code < 0) {
-                        char *temp = strstr(line, "HTTP/1.");
+                        char *temp = NULL;
+                        int status_idx = 0;
+                        if(req->protocol == PROTOCOL_HTTP) {
+                            temp = strstr(line, "HTTP/1.");
+                            status_idx = 9;
+                        } else if(req->protocol == PROTOCOL_SIP) {
+                            temp = strstr(line, "SIP/2.0");
+                            status_idx = 8;
+                        }
                         if(temp) {
                             char statusCode[4] = { 0 };
-                            memcpy(statusCode, temp + 9, 3);
+                            memcpy(statusCode, temp + status_idx, 3);
                             req->response->status_code = atoi(statusCode);
                             ESP_LOGD(REQ_TAG, "status code: %d", req->response->status_code);
                         }
@@ -640,7 +672,9 @@ void req_websocket_task(void *pv)
 int req_perform(request_t *req)
 {
     do {
-        REQ_CHECK(req->_connect(req) < 0, "Error connnect", break);
+        if(req->socket < 0) {
+            REQ_CHECK(req->_connect(req) < 0, "Error connnect", break);
+        }
         REQ_CHECK(req_process_upload(req) < 0, "Error send request", break);
         REQ_CHECK(req_process_download(req) < 0, "Error download", break);
         if(req->valid_websocket) {
@@ -651,7 +685,7 @@ int req_perform(request_t *req)
             if(found) {
                 req_list_set_key(req->header, "Referer", (const char*)found->value);
                 req_setopt_from_uri(req, (const char*)found->value);
-                ESP_LOGD(REQ_TAG, "Following: %s", (char*)found->value);
+                ESP_LOGI(REQ_TAG, "Following: %s", (char*)found->value);
                 req->_close(req);
                 continue;
             }
@@ -660,7 +694,7 @@ int req_perform(request_t *req)
             break;
         }
     } while(1);
-    if(req->valid_websocket == 0) {
+    if(req->protocol == PROTOCOL_HTTP) {
         req->_close(req);
     }
     return req->response->status_code;

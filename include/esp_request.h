@@ -32,11 +32,18 @@ typedef enum {
     REQ_SET_POSTFIELDS,
     REQ_SET_DATAFIELDS,
     REQ_SET_UPLOAD_LEN,
+    REQ_SET_PROTOCOL,
     REQ_FUNC_DOWNLOAD_CB,
     REQ_FUNC_UPLOAD_CB,
     REQ_REDIRECT_FOLLOW,
     REQ_FUNC_WEBSOCKET
 } REQ_OPTS;
+
+typedef enum {
+    PROTOCOL_HTTP = 0,
+    PROTOCOL_WEBSOCKET = 1,
+    PROTOCOL_SIP = 2
+} REQ_PROTOCOL;
 
 typedef enum {
     WS_CONNECTED = 0x01,
@@ -77,6 +84,7 @@ typedef struct request_t {
     response_t *response;
     int is_websocket;
     int valid_websocket;
+    REQ_PROTOCOL protocol;
 } request_t;
 
 typedef int (*download_cb)(request_t *req, void *buffer, int len);
