@@ -694,7 +694,7 @@ int req_perform(request_t *req)
 {
     do {
         if (req->socket < 0) {
-            REQ_CHECK(req->_connect(req) < 0, "Error connnect", break);
+            REQ_CHECK(req->_connect(req) < 0, "Error connnect", return -1);
         }
         REQ_CHECK(req_process_upload(req) < 0, "Error send request", break);
         REQ_CHECK(req_process_download(req) < 0, "Error download", break);
