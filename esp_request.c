@@ -47,7 +47,7 @@ static char *http_auth_basic_encode(const char *username, const char *password)
 
 static int nossl_connect(request_t *req)
 {
-    int socket;
+    int req_socket;
     struct sockaddr_in remote_ip;
     struct timeval tv;
     req_list_t *host, *port, *timeout;
@@ -62,8 +62,8 @@ static int nossl_connect(request_t *req)
         }
     }
 
-    socket = socket(PF_INET, SOCK_STREAM, 0);
-    REQ_CHECK(socket < 0, "socket failed", return -1);
+    req_socket = socket(PF_INET, SOCK_STREAM, 0);
+    REQ_CHECK(req_socket < 0, "socket failed", return -1);
 
     port = req_list_get_key(req->opt, "port");
     if(port == NULL)
@@ -78,17 +78,17 @@ static int nossl_connect(request_t *req)
         tv.tv_sec = atoi(timeout->value);
     }
     tv.tv_usec = 0;
-    setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    setsockopt(req_socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
     ESP_LOGD(REQ_TAG, "[sock=%d],connecting to server IP:%s,Port:%s...",
-             socket, ipaddr_ntoa((const ip_addr_t*)&remote_ip.sin_addr.s_addr), (char*)port->value);
-    if(connect(socket, (struct sockaddr *)(&remote_ip), sizeof(struct sockaddr)) != 0) {
-        close(socket);
+             req_socket, ipaddr_ntoa((const ip_addr_t*)&remote_ip.sin_addr.s_addr), (char*)port->value);
+    if(connect(req_socket, (struct sockaddr *)(&remote_ip), sizeof(struct sockaddr)) != 0) {
+        close(req_socket);
         req->socket = -1;
         return -1;
     }
-    req->socket = socket;
-    return socket;
+    req->socket = req_socket;
+    return req_socket;
 }
 static int ssl_connect(request_t *req)
 {
