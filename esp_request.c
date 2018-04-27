@@ -687,7 +687,6 @@ int req_perform(request_t *req)
                 req_list_set_key(req->header, "Referer", (const char*)found->value);
                 req_setopt_from_uri(req, (const char*)found->value);
                 ESP_LOGI(REQ_TAG, "Following: %s", (char*)found->value);
-                req->_close(req);
                 continue;
             }
             break;
