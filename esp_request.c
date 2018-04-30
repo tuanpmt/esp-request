@@ -380,6 +380,9 @@ void req_setopt(request_t *req, REQ_OPTS opt, void* data)
         case REQ_SET_PATH:
             req_list_set_key(req->opt, "path", data);
             break;
+        case REQ_SET_TIMEOUT:
+        	req_list_set_key(req->opt,"timeout",data);
+        	break;
         case REQ_SET_URI:
             req_setopt_from_uri(req, data);
             break;
