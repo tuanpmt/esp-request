@@ -225,10 +225,13 @@ static int nossl_read(request_t *req, char *buffer, int len)
 }
 static int ssl_close(request_t *req)
 {
-    SSL_shutdown(req->ssl);
-    SSL_free(req->ssl);
-    close(req->socket);
-    SSL_CTX_free(req->ctx);
+	if(req->ssl != NULL)
+	{
+		SSL_shutdown(req->ssl);
+		SSL_free(req->ssl);
+	}
+	close(req->socket);
+	if(req->ssl != NULL) SSL_CTX_free(req->ctx);
     return 0;
 }
 
