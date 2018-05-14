@@ -1,0 +1,5 @@
+set(COMPONENT_SRCDIRS ".")
+set(COMPONENT_ADD_INCLUDEDIRS "include")
+set(COMPONENT_REQUIRES openssl lwip)
+set(COMPONENT_PRIV_REQUIRES mbedtls)
+register_component()
