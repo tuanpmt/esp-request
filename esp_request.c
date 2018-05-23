@@ -348,9 +348,10 @@ void req_setopt(request_t *req, REQ_OPTS opt, void* data)
     int post_len;
     char len_str[10] = {0};
     req_list_t *tmp;
-    char *host_w_port = malloc(1024);
+    char *host_w_port = NULL;
     if(!req || !data)
         return;
+    host_w_port = malloc(1024);
     switch(opt) {
         case REQ_SET_METHOD:
             req_list_set_key(req->opt, "method", data);
