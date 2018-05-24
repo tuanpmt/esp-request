@@ -225,10 +225,13 @@ static int nossl_read(request_t *req, char *buffer, int len)
 }
 static int ssl_close(request_t *req)
 {
-    SSL_shutdown(req->ssl);
-    SSL_free(req->ssl);
-    close(req->socket);
-    SSL_CTX_free(req->ctx);
+	if(req->ssl != NULL)
+	{
+		SSL_shutdown(req->ssl);
+		SSL_free(req->ssl);
+	}
+	close(req->socket);
+	if(req->ssl != NULL) SSL_CTX_free(req->ctx);
     return 0;
 }
 
@@ -380,6 +383,9 @@ void req_setopt(request_t *req, REQ_OPTS opt, void* data)
         case REQ_SET_PATH:
             req_list_set_key(req->opt, "path", data);
             break;
+        case REQ_SET_TIMEOUT:
+        	req_list_set_key(req->opt,"timeout",data);
+        	break;
         case REQ_SET_URI:
             req_setopt_from_uri(req, data);
             break;
