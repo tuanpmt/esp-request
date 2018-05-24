@@ -1,6 +1,11 @@
 # Lightweight HTTP client for ESP32 
 ## Example 
 
+## This project is no longer supported, please use
+
+https://github.com/espressif/esp-idf/tree/master/components/esp_http_client
+
+
 ```cpp
 int download_callback(request_t *req, char *data, int len)
 {
